@@ -4,7 +4,7 @@
 // pour confirmer que ton URL est valide, quand tu configures le webhook)
 export default async function handler(req, res) {
   if (req.method === 'GET') {
-    const VERIFY_TOKEN = "noxa_verify_2026_xyz"; // à définir toi-même
+    const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN; // à définir toi-même
 
     const mode = req.query['hub.mode'];
     const token = req.query['hub.verify_token'];
