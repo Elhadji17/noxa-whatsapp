@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NOXA — Votre assistant WhatsApp intelligent</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --indigo: #1B2340;
+    --marigold: #E8A33D;
+    --teal: #0F7A73;
+    --cream: #FBF3E7;
+    --charcoal: #201A14;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Inter', sans-serif;
+    background: var(--cream);
+    color: var(--charcoal);
+    line-height: 1.5;
+  }
+  h1, h2, h3 { font-family: 'Bricolage Grotesque', sans-serif; }
+  a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible {
+    outline: 3px solid var(--teal);
+    outline-offset: 2px;
+  }
+
+  .container { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+
+  /* HERO */
+  .hero {
+    background: var(--indigo);
+    color: var(--cream);
+    padding: 80px 0 100px;
+  }
+  .hero-grid {
+    display: grid;
+    grid-template-columns: 1.1fr 1fr;
+    gap: 48px;
+    align-items: center;
+  }
+  .eyebrow {
+    font-family: 'IBM Plex Mono', monospace;
+    color: var(--marigold);
+    font-size: 13px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+  .hero h1 {
+    font-size: 44px;
+    font-weight: 800;
+    line-height: 1.1;
+    margin-bottom: 20px;
+  }
+  .hero p.sub {
+    font-size: 18px;
+    color: #D8D4E6;
+    margin-bottom: 32px;
+    max-width: 480px;
+  }
+  .cta {
+    display: inline-block;
+    background: var(--marigold);
+    color: var(--indigo);
+    font-weight: 600;
+    padding: 14px 28px;
+    border-radius: 8px;
+    text-decoration: none;
+    border: none;
+    font-size: 16px;
+    cursor: pointer;
+    transition: transform 0.15s ease;
+  }
+  .cta:hover { transform: translateY(-2px); }
+
+  /* PHONE MOCKUP */
+  .phone {
+    background: #0B1024;
+    border-radius: 32px;
+    padding: 14px;
+    box-shadow: 0 30px 60px rgba(0,0,0,0.35);
+    max-width: 320px;
+    margin: 0 auto;
+  }
+  .phone-screen {
+    background: #ECE5DD;
+    border-radius: 20px;
+    padding: 16px 12px;
+    height: 380px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    overflow: hidden;
+  }
+  .phone-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--charcoal);
+    font-size: 13px;
+    font-weight: 600;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(0,0,0,0.08);
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--teal); }
+  .bubble {
+    max-width: 80%;
+    padding: 10px 14px;
+    border-radius: 14px;
+    font-size: 14px;
+    opacity: 0;
+    transform: translateY(8px);
+    animation: rise 0.4s ease forwards;
+  }
+  .bubble.client {
+    align-self: flex-end;
+    background: #DCF8C6;
+    border-bottom-right-radius: 4px;
+  }
+  .bubble.bot {
+    align-self: flex-start;
+    background: #FFFFFF;
+    border-bottom-left-radius: 4px;
+  }
+    .bubble.client, .bubble.bot {
+    color: var(--charcoal);
+    opacity: 1; /* évite qu'un état d'animation résiduel reste bloqué */
+    }
+  @keyframes rise { to { opacity: 1; transform: translateY(0); } }
+  .b1 { animation-delay: 0.3s; }
+  .b2 { animation-delay: 1.3s; }
+  .b3 { animation-delay: 2.4s; }
+  .b4 { animation-delay: 3.6s; }
+  .timestamp {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    color: #8a8a8a;
+    text-align: center;
+    margin-top: auto;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .bubble { animation: none; opacity: 1; transform: none; }
+  }
+
+  /* VALUE PROPS */
+  .values {
+    padding: 72px 0;
+  }
+  .values h2 {
+    font-size: 28px;
+    text-align: center;
+    margin-bottom: 48px;
+  }
+  .value-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 32px;
+  }
+  .value-card {
+    background: white;
+    border-radius: 12px;
+    padding: 28px;
+    border: 1px solid rgba(0,0,0,0.06);
+  }
+  .value-card .icon { color: var(--teal); margin-bottom: 14px; }
+  .value-card h3 { font-size: 17px; margin-bottom: 8px; }
+  .value-card p { font-size: 14px; color: #5c5346; }
+
+  /* HOW IT WORKS */
+  .how {
+    background: white;
+    padding: 72px 0;
+  }
+  .how h2 { font-size: 28px; text-align: center; margin-bottom: 48px; }
+  .steps {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 32px;
+  }
+  .step .num {
+    font-family: 'IBM Plex Mono', monospace;
+    color: var(--marigold);
+    font-size: 13px;
+    margin-bottom: 10px;
+  }
+  .step h3 { font-size: 16px; margin-bottom: 8px; }
+  .step p { font-size: 14px; color: #5c5346; }
+
+  /* FORM */
+  .signup {
+    background: var(--teal);
+    color: var(--cream);
+    padding: 72px 0;
+  }
+  .signup-inner {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 48px;
+    align-items: start;
+  }
+  .signup h2 { font-size: 30px; margin-bottom: 14px; }
+  .signup p { color: #D8ECE9; max-width: 380px; }
+  form {
+    background: white;
+    color: var(--charcoal);
+    border-radius: 14px;
+    padding: 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  label { font-size: 13px; font-weight: 600; margin-bottom: 4px; display: block; }
+  input, select {
+    width: 100%;
+    padding: 11px 12px;
+    border-radius: 8px;
+    border: 1px solid #ddd6c9;
+    font-size: 15px;
+    font-family: inherit;
+  }
+  .submit-btn {
+    background: var(--indigo);
+    color: white;
+    border: none;
+    padding: 14px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 15px;
+    cursor: pointer;
+  }
+  .form-msg { font-size: 14px; min-height: 20px; }
+  .form-msg.success { color: var(--teal); font-weight: 600; }
+  .form-msg.error { color: #b34747; font-weight: 600; }
+
+  footer {
+    padding: 32px 0;
+    text-align: center;
+    font-size: 13px;
+    color: #8a8073;
+  }
+
+  @media (max-width: 800px) {
+    .hero-grid, .value-grid, .steps, .signup-inner { grid-template-columns: 1fr; }
+    .hero h1 { font-size: 32px; }
+    .phone { margin-top: 32px; }
+  }
+</style>
+</head>
+<body>
+
+<section class="hero">
+  <div class="container hero-grid">
+    <div>
+      <div class="eyebrow">Assistant WhatsApp • Dakar</div>
+      <h1>Vos clients écrivent à 2h du matin. NOXA répond à leur place.</h1>
+      <p class="sub">Un assistant intelligent branché sur votre WhatsApp habituel. Il connaît vos produits, vos prix, vos horaires — et répond en français comme en wolof, jour et nuit.</p>
+      <a href="#inscription" class="cta">Tester gratuitement</a>
+    </div>
+    <div class="phone" aria-hidden="true">
+      <div class="phone-screen">
+        <div class="phone-header"><span class="dot"></span> Assistant boutique</div>
+        <div class="bubble client b1">Am nga robe wax taille M ?</div>
+        <div class="bubble bot b2">Waaw, am nañu ko ! 15 000 FCFA la. Ndax nga bëgg ma défal ko livraison ?</div>
+        <div class="bubble client b3">Oui, à Sacré-Cœur</div>
+        <div class="bubble bot b4">Parfait, livraison 1 500 FCFA. Je vous envoie le lien de paiement 🥻</div>
+        <div class="timestamp">02:14 — répondu en 2 secondes</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="values">
+  <div class="container">
+    <h2>Ce que ça change pour votre commerce</h2>
+    <div class="value-grid">
+      <div class="value-card">
+        <div class="icon">◐</div>
+        <h3>Disponible jour et nuit</h3>
+        <p>Un client qui écrit à 23h n'attend plus jusqu'au lendemain. NOXA répond tout de suite, même quand vous dormez.</p>
+      </div>
+      <div class="value-card">
+        <div class="icon">✆</div>
+        <h3>Votre WhatsApp, inchangé</h3>
+        <p>Vous gardez votre numéro et votre application habituels. NOXA s'ajoute par-dessus, sans rien enlever.</p>
+      </div>
+      <div class="value-card">
+        <div class="icon">✎</div>
+        <h3>Répond juste, jamais au hasard</h3>
+        <p>Si une info n'est pas dans votre catalogue, l'assistant le dit honnêtement plutôt que d'inventer une réponse.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="how">
+  <div class="container">
+    <h2>Comment ça marche</h2>
+    <div class="steps">
+      <div class="step">
+        <div class="num">01</div>
+        <h3>Un client écrit sur WhatsApp</h3>
+        <p>Question sur un prix, une taille, une disponibilité — en français ou en wolof.</p>
+      </div>
+      <div class="step">
+        <div class="num">02</div>
+        <h3>NOXA répond à partir de votre catalogue</h3>
+        <p>L'assistant connaît vos produits exacts et répond en quelques secondes.</p>
+      </div>
+      <div class="step">
+        <div class="num">03</div>
+        <h3>Vous recevez la commande</h3>
+        <p>Plus besoin d'être derrière l'écran pour ne pas perdre une vente.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="signup" id="inscription">
+  <div class="container signup-inner">
+    <div>
+      <h2>Testez NOXA gratuitement</h2>
+      <p>Laissez vos informations, on vous contacte sous 24h pour mettre en place votre assistant, sans engagement.</p>
+    </div>
+    <form id="signup-form">
+      <div>
+        <label for="businessName">Nom du commerce</label>
+        <input type="text" id="businessName" name="businessName" required>
+      </div>
+      <div>
+        <label for="sector">Secteur</label>
+        <select id="sector" name="sector" required>
+          <option value="">Sélectionnez...</option>
+          <option value="Vêtements">Vêtements</option>
+          <option value="Cosmétiques">Cosmétiques</option>
+          <option value="Immobilier">Immobilier</option>
+          <option value="Autre">Autre</option>
+        </select>
+      </div>
+      <div>
+        <label for="whatsapp">Numéro WhatsApp du commerce</label>
+        <input type="tel" id="whatsapp" name="whatsapp" placeholder="+221 77 000 00 00" required>
+      </div>
+      <div>
+        <label for="contactName">Votre nom</label>
+        <input type="text" id="contactName" name="contactName" required>
+      </div>
+      <button type="submit" class="submit-btn">Envoyer ma demande</button>
+      <p class="form-msg" id="form-msg"></p>
+    </form>
+  </div>
+</section>
+
+<footer>
+  NOXA — Dakar, Sénégal
+</footer>
+
+<script>
+  const form = document.getElementById('signup-form');
+  const msg = document.getElementById('form-msg');
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    msg.textContent = 'Envoi en cours...';
+    msg.className = 'form-msg';
+
+    const data = Object.fromEntries(new FormData(form).entries());
+
+    try {
+      const res = await fetch('/api/inscription', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+
+      if (!res.ok) throw new Error('Erreur serveur');
+
+      msg.textContent = 'Merci ! On vous contacte très vite.';
+      msg.className = 'form-msg success';
+      form.reset();
+    } catch (err) {
+      msg.textContent = "Erreur d'envoi. Réessayez ou contactez-nous directement.";
+      msg.className = 'form-msg error';
+    }
+  });
+</script>
+
+</body>
+</html>
