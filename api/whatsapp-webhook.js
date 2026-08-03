@@ -1,5 +1,35 @@
 // api/whatsapp-webhook.js
 
+// Un objet qui fait la correspondance entre le numéro WhatsApp de chaque
+// commerçant (son phone_number_id) et son catalogue/prompt système.
+// Ajoute une nouvelle entrée ici à chaque nouveau commerçant test.
+const MERCHANTS = {
+  "1235231613010112": {
+    name: "Boutique test (numéro Meta)",
+    systemPrompt: `Tu es l'assistant WhatsApp de [Nom boutique], boutique de vêtements à Dakar.
+
+RÈGLE ABSOLUE : N'utilise QUE les informations du catalogue ci-dessous. Si un produit, une taille, un prix ou un service n'y figure pas, réponds : "Je n'ai pas cette info précise, on vérifie et je reviens vers vous vite !" Ne jamais inventer un prix, une taille ou une disponibilité.
+
+PRODUITS :
+- Robe Wax imprimée — Tailles S/M/L — 15 000 FCFA
+- Ensemble Boubou homme — Tailles M/L/XL — 25 000 FCFA
+- Chemise brodée — Tailles S/M/L/XL — 12 000 FCFA
+- Sac à main tissu wax — Taille unique — 8 000 FCFA
+- Turban assorti — Taille unique — 3 000 FCFA
+
+LIVRAISON : Dakar centre 1 500 FCFA, banlieue 2 500 FCFA, gratuite dès 30 000 FCFA
+HORAIRES : Lundi-Samedi 9h-19h, fermé dimanche
+
+TON : Chaleureux, direct, mélange naturel français/wolof simple ("Waaw", "am nañu ko", "jërejëf"). Réponses courtes, 2-3 phrases max.`,
+  },
+
+  // Exemple pour un futur commerçant réel — duplique ce bloc et remplis-le
+  // "PHONE_NUMBER_ID_DU_COMMERCANT": {
+  //   name: "Nom du commerce",
+  //   systemPrompt: `... catalogue et infos réelles du commerçant ...`,
+  // },
+};
+
 export default async function handler(req, res) {
   if (req.method === 'GET') {
     const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN;
@@ -20,6 +50,7 @@ export default async function handler(req, res) {
       const entry = body.entry?.[0];
       const change = entry?.changes?.[0];
       const message = change?.value?.messages?.[0];
+      const phoneNumberId = change?.value?.metadata?.phone_number_id;
 
       if (!message) {
         return res.status(200).send('OK');
@@ -28,7 +59,15 @@ export default async function handler(req, res) {
       const from = message.from;
       const text = message.text?.body;
 
-      console.log(`Message reçu de ${from} : ${text}`);
+      // On identifie le commerçant à partir du numéro qui a reçu le message
+      const merchant = MERCHANTS[phoneNumberId];
+
+      if (!merchant) {
+        console.error(`Commerçant inconnu pour phone_number_id: ${phoneNumberId}`);
+        return res.status(200).send('OK');
+      }
+
+      console.log(`Message reçu pour ${merchant.name} de ${from} : ${text}`);
 
       const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
@@ -39,24 +78,7 @@ export default async function handler(req, res) {
         body: JSON.stringify({
           model: 'gpt-4o-mini',
           messages: [
-            {
-              role: 'system',
-              content: `Tu es l'assistant WhatsApp de [Nom boutique], boutique de vêtements à Dakar.
-
-RÈGLE ABSOLUE : N'utilise QUE les informations du catalogue ci-dessous. Si un produit, une taille, un prix ou un service n'y figure pas, réponds : "Je n'ai pas cette info précise, on vérifie et je reviens vers vous vite !" Ne jamais inventer un prix, une taille ou une disponibilité.
-
-PRODUITS :
-- Robe Wax imprimée — Tailles S/M/L — 15 000 FCFA
-- Ensemble Boubou homme — Tailles M/L/XL — 25 000 FCFA
-- Chemise brodée — Tailles S/M/L/XL — 12 000 FCFA
-- Sac à main tissu wax — Taille unique — 8 000 FCFA
-- Turban assorti — Taille unique — 3 000 FCFA
-
-LIVRAISON : Dakar centre 1 500 FCFA, banlieue 2 500 FCFA, gratuite dès 30 000 FCFA
-HORAIRES : Lundi-Samedi 9h-19h, fermé dimanche
-
-TON : Chaleureux, direct, mélange naturel français/wolof simple ("Waaw", "am nañu ko", "jërejëf"). Réponses courtes, 2-3 phrases max.`,
-            },
+            { role: 'system', content: merchant.systemPrompt },
             { role: 'user', content: text },
           ],
         }),
@@ -65,8 +87,9 @@ TON : Chaleureux, direct, mélange naturel français/wolof simple ("Waaw", "am n
       const aiData = await aiResponse.json();
       const replyText = aiData.choices?.[0]?.message?.content || "Désolé, je n'ai pas pu traiter votre message.";
 
+      // On utilise le même phone_number_id pour répondre depuis le bon numéro
       await fetch(
-        `https://graph.facebook.com/v21.0/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`,
+        `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`,
         {
           method: 'POST',
           headers: {
