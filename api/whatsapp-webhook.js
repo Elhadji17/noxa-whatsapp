@@ -96,6 +96,7 @@ export default async function handler(req, res) {
   // Garde seulement les 10 derniers messages pour éviter un prompt trop long
   const recentHistory = conversationHistory[conversationKey].slice(-10);
 
+  console.log('Historique envoyé à OpenAI:', JSON.stringify(recentHistory));
   const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
