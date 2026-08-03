@@ -39,6 +39,11 @@ TON : Chaleureux, direct, mélange naturel français/wolof simple ("Waaw", "am n
   // },
 };
 
+// Historique en mémoire par conversation (clé = numéro du client)
+// Attention : se réinitialise à chaque redéploiement ou inactivité prolongée
+// de la fonction serverless — suffisant pour une démo, pas pour la production.
+const conversationHistory = {};
+
 export default async function handler(req, res) {
   if (req.method === 'GET') {
     const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN;
