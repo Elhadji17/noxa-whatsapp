@@ -70,31 +70,41 @@ export default async function handler(req, res) {
 
       // On identifie le commerçant à partir du numéro qui a reçu le message
       const merchant = MERCHANTS[phoneNumberId];
+  if (!merchant) {
+    return res.status(200).send('OK');
+  }
 
-      if (!merchant) {
-        console.error(`Commerçant inconnu pour phone_number_id: ${phoneNumberId}`);
-        return res.status(200).send('OK');
-      }
+  const conversationKey = `${phoneNumberId}_${from}`;
+  if (!conversationHistory[conversationKey]) {
+    conversationHistory[conversationKey] = [];
+  }
 
-      console.log(`Message reçu pour ${merchant.name} de ${from} : ${text}`);
+  // Ajoute le message du client à l'historique
+  conversationHistory[conversationKey].push({ role: 'user', content: text });
 
-      const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          messages: [
-            { role: 'system', content: merchant.systemPrompt },
-            { role: 'user', content: text },
-          ],
-        }),
-      });
+  // Garde seulement les 10 derniers messages pour éviter un prompt trop long
+  const recentHistory = conversationHistory[conversationKey].slice(-10);
 
-      const aiData = await aiResponse.json();
-      const replyText = aiData.choices?.[0]?.message?.content || "Désolé, je n'ai pas pu traiter votre message.";
+  const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: merchant.systemPrompt },
+        ...recentHistory,
+      ],
+    }),
+  });
+
+  const aiData = await aiResponse.json();
+  const replyText = aiData.choices?.[0]?.message?.content || "Désolé, je n'ai pas pu traiter votre message.";
+
+  // Ajoute la réponse du bot à l'historique aussi
+  conversationHistory[conversationKey].push({ role: 'assistant', content: replyText });
 
       // On utilise le même phone_number_id pour répondre depuis le bon numéro
       await fetch(
