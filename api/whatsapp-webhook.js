@@ -6,6 +6,10 @@
 const MERCHANTS = {
   "1235231613010112": {
     name: "Boutique test (numéro Meta)",
+    systemPrompt: `... (inchangé) ...`,
+  },
+  "1321520757705474": {
+    name: "Boutique test (numéro Sénégal +221 71 015 64 37)",
     systemPrompt: `Tu es l'assistant WhatsApp de [Nom boutique], boutique de vêtements à Dakar.
 
 RÈGLE ABSOLUE : N'utilise QUE les informations du catalogue ci-dessous. Si un produit, une taille, un prix ou un service n'y figure pas, réponds : "Je n'ai pas cette info précise, on vérifie et je reviens vers vous vite !" Ne jamais inventer un prix, une taille ou une disponibilité.
