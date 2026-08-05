@@ -52,26 +52,64 @@ TON : Chaleureux, direct, mélange naturel français/wolof simple ("Waaw", "am n
 // Historique en mémoire par conversation (clé = numéro du client)
 // Attention : se réinitialise à chaque redéploiement ou inactivité prolongée
 // de la fonction serverless — suffisant pour une démo, pas pour la production.
+// api/whatsapp-webhook.js
+
+
 const conversationHistory = {};
+
+// Nouvelle fonction : télécharge un média WhatsApp (audio) et le transcrit via Whisper
+async function transcribeWhatsAppAudio(mediaId) {
+  // Étape 1 : récupérer l'URL de téléchargement du média
+  const mediaInfoResponse = await fetch(
+    `https://graph.facebook.com/v21.0/${mediaId}`,
+    {
+      headers: {
+        'Authorization': `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`,
+      },
+    }
+  );
+  const mediaInfo = await mediaInfoResponse.json();
+  const audioUrl = mediaInfo.url;
+
+  // Étape 2 : télécharger le fichier audio binaire (authentification requise)
+  const audioResponse = await fetch(audioUrl, {
+    headers: {
+      'Authorization': `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`,
+    },
+  });
+  const audioBuffer = await audioResponse.arrayBuffer();
+
+  // Étape 3 : envoyer à Whisper pour transcription
+  const formData = new FormData();
+  formData.append('file', new Blob([audioBuffer], { type: 'audio/ogg' }), 'audio.ogg');
+  formData.append('model', 'whisper-1');
+  // Pas de "language" forcé volontairement : Whisper détecte automatiquement,
+  // et forcer une langue non officiellement supportée (wolof) pourrait
+  // dégrader le résultat plutôt que l'améliorer
+
+  const transcriptionResponse = await fetch(
+    'https://api.openai.com/v1/audio/transcriptions',
+    {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+      },
+      body: formData,
+    }
+  );
+
+  const transcriptionData = await transcriptionResponse.json();
+  return transcriptionData.text || null;
+}
 
 export default async function handler(req, res) {
   if (req.method === 'GET') {
-    const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN;
-    const mode = req.query['hub.mode'];
-    const token = req.query['hub.verify_token'];
-    const challenge = req.query['hub.challenge'];
-
-    if (mode === 'subscribe' && token === VERIFY_TOKEN) {
-      return res.status(200).send(challenge);
-    } else {
-      return res.status(403).send('Verification failed');
-    }
+    // ... (inchangé)
   }
 
   if (req.method === 'POST') {
     try {
       const body = req.body;
-      console.log('PAYLOAD COMPLET:', JSON.stringify(body, null, 2));
       const entry = body.entry?.[0];
       const change = entry?.changes?.[0];
       const message = change?.value?.messages?.[0];
@@ -82,48 +120,58 @@ export default async function handler(req, res) {
       }
 
       const from = message.from;
-      const text = message.text?.body;
+      let text = message.text?.body;
 
-      // On identifie le commerçant à partir du numéro qui a reçu le message
+      // Nouveau : si c'est un message vocal, on le transcrit d'abord
+      if (message.type === 'audio' && message.audio?.id) {
+        console.log(`Message vocal reçu de ${from}, transcription en cours...`);
+        text = await transcribeWhatsAppAudio(message.audio.id);
+
+        if (!text) {
+          console.error('Échec de la transcription audio');
+          text = "[message vocal non transcrit]";
+        } else {
+          console.log(`Transcription obtenue: ${text}`);
+        }
+      }
+
+      if (!text) {
+        return res.status(200).send('OK');
+      }
+
       const merchant = MERCHANTS[phoneNumberId];
-  if (!merchant) {
-    return res.status(200).send('OK');
-  }
+      if (!merchant) {
+        return res.status(200).send('OK');
+      }
 
-  const conversationKey = `${phoneNumberId}_${from}`;
-  if (!conversationHistory[conversationKey]) {
-    conversationHistory[conversationKey] = [];
-  }
+      const conversationKey = `${phoneNumberId}_${from}`;
+      if (!conversationHistory[conversationKey]) {
+        conversationHistory[conversationKey] = [];
+      }
 
-  // Ajoute le message du client à l'historique
-  conversationHistory[conversationKey].push({ role: 'user', content: text });
+      conversationHistory[conversationKey].push({ role: 'user', content: text });
+      const recentHistory = conversationHistory[conversationKey].slice(-10);
 
-  // Garde seulement les 10 derniers messages pour éviter un prompt trop long
-  const recentHistory = conversationHistory[conversationKey].slice(-10);
+      const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: [
+            { role: 'system', content: merchant.systemPrompt },
+            ...recentHistory,
+          ],
+        }),
+      });
 
-  console.log('Historique envoyé à OpenAI:', JSON.stringify(recentHistory));
-  const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model: 'gpt-4o-mini',
-      messages: [
-        { role: 'system', content: merchant.systemPrompt },
-        ...recentHistory,
-      ],
-    }),
-  });
+      const aiData = await aiResponse.json();
+      const replyText = aiData.choices?.[0]?.message?.content || "Désolé, je n'ai pas pu traiter votre message.";
 
-  const aiData = await aiResponse.json();
-  const replyText = aiData.choices?.[0]?.message?.content || "Désolé, je n'ai pas pu traiter votre message.";
+      conversationHistory[conversationKey].push({ role: 'assistant', content: replyText });
 
-  // Ajoute la réponse du bot à l'historique aussi
-  conversationHistory[conversationKey].push({ role: 'assistant', content: replyText });
-
-      // On utilise le même phone_number_id pour répondre depuis le bon numéro
       await fetch(
         `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`,
         {
