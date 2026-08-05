@@ -6,10 +6,13 @@
 const MERCHANTS = {
   "1235231613010112": {
     name: "Boutique test (numéro Meta)",
-    systemPrompt: `... (inchangé) ...`,
-  },
-  "1321520757705474": {
-    name: "Boutique test (numéro Sénégal +221 71 015 64 37)",
+    products: [
+      { name: "Robe Wax imprimée", price: "15 000 FCFA", imageUrl: "https://noxa-whatsapp.vercel.app/images/robe.jpg" },
+      { name: "Ensemble Boubou homme", price: "25 000 FCFA", imageUrl: "https://noxa-whatsapp.vercel.app/images/ensemble.jpg" },
+      { name: "Chemise brodée", price: "12 000 FCFA", imageUrl: "https://noxa-whatsapp.vercel.app/images/chemise.jpg" },
+      { name: "Sac à main tissu wax", price: "8 000 FCFA", imageUrl: "https://noxa-whatsapp.vercel.app/images/sac.jpg" },
+      { name: "Turban assorti", price: "3 000 FCFA", imageUrl: "https://noxa-whatsapp.vercel.app/images/turban.jpg" },
+    ],
     systemPrompt: `Tu es l'assistant WhatsApp de [Nom boutique], boutique de vêtements à Dakar.
 
 RÈGLE ABSOLUE : N'utilise QUE les informations du catalogue ci-dessous. Si un produit, une taille, un prix ou un service n'y figure pas, réponds : "Je n'ai pas cette info précise, on vérifie et je reviens vers vous vite !" Ne jamais inventer un prix, une taille ou une disponibilité.
@@ -56,6 +59,25 @@ TON : Chaleureux, direct, mélange naturel français/wolof simple ("Waaw", "am n
 
 
 const conversationHistory = {};
+
+async function sendWhatsAppImage(phoneNumberId, to, imageUrl, caption) {
+  await fetch(
+    `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`,
+      },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        to: to,
+        type: 'image',
+        image: { link: imageUrl, caption: caption || '' },
+      }),
+    }
+  );
+}
 
 // Nouvelle fonction : télécharge un média WhatsApp (audio) et le transcrit via Whisper
 async function transcribeWhatsAppAudio(mediaId) {
@@ -163,6 +185,7 @@ export default async function handler(req, res) {
 
       conversationHistory[conversationKey].push({ role: 'assistant', content: replyText });
 
+      // Envoi du texte, comme avant
       await fetch(
         `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`,
         {
@@ -178,6 +201,15 @@ export default async function handler(req, res) {
           }),
         }
       );
+
+      // Nouveau : détecte si un produit précis est mentionné et envoie sa photo
+      const mentionedProduct = merchant.products.find(p =>
+        replyText.toLowerCase().includes(p.name.toLowerCase().split(' ')[0])
+      );
+
+      if (mentionedProduct) {
+        await sendWhatsAppImage(phoneNumberId, from, mentionedProduct.imageUrl, `${mentionedProduct.name} — ${mentionedProduct.price}`);
+      }
 
       return res.status(200).send('OK');
     } catch (error) {
