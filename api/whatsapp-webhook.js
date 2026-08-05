@@ -59,41 +59,32 @@ const conversationHistory = {};
 
 // Nouvelle fonction : télécharge un média WhatsApp (audio) et le transcrit via Whisper
 async function transcribeWhatsAppAudio(mediaId) {
-  // Étape 1 : récupérer l'URL de téléchargement du média
   const mediaInfoResponse = await fetch(
     `https://graph.facebook.com/v21.0/${mediaId}`,
-    {
-      headers: {
-        'Authorization': `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`,
-      },
-    }
+    { headers: { 'Authorization': `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}` } }
   );
   const mediaInfo = await mediaInfoResponse.json();
   const audioUrl = mediaInfo.url;
 
-  // Étape 2 : télécharger le fichier audio binaire (authentification requise)
   const audioResponse = await fetch(audioUrl, {
-    headers: {
-      'Authorization': `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`,
-    },
+    headers: { 'Authorization': `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}` },
   });
   const audioBuffer = await audioResponse.arrayBuffer();
 
-  // Étape 3 : envoyer à Whisper pour transcription
   const formData = new FormData();
   formData.append('file', new Blob([audioBuffer], { type: 'audio/ogg' }), 'audio.ogg');
   formData.append('model', 'whisper-1');
-  // Pas de "language" forcé volontairement : Whisper détecte automatiquement,
-  // et forcer une langue non officiellement supportée (wolof) pourrait
-  // dégrader le résultat plutôt que l'améliorer
+  // On force le français comme langue principale : Whisper a alors moins
+  // tendance à halluciner une langue totalement différente (italien, arabe)
+  // et transcrit le wolof "phonétiquement" en alphabet latin, ce qui reste
+  // plus proche du wolof réel que les hallucinations observées sans ce réglage
+  formData.append('language', 'fr');
 
   const transcriptionResponse = await fetch(
     'https://api.openai.com/v1/audio/transcriptions',
     {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-      },
+      headers: { 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}` },
       body: formData,
     }
   );
