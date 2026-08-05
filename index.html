@@ -387,6 +387,38 @@
     }
   });
 </script>
+<script src="https://connect.facebook.net/fr_FR/sdk.js" async defer crossorigin="anonymous"></script>
+
+<button id="fb-connect-btn" type="button">Connecter mon WhatsApp Business</button>
+
+<script>
+  window.fbAsyncInit = function() {
+    FB.init({
+      appId: '10119096947918336', // ton Identifiant de l'application NOXA
+      version: 'v21.0'
+    });
+  };
+
+  document.getElementById('fb-connect-btn').addEventListener('click', function() {
+    FB.login(function(response) {
+      if (response.authResponse && response.authResponse.code) {
+        fetch('/api/embedded-signup-callback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code: response.authResponse.code }),
+        });
+      }
+    }, {
+      config_id: '1570047668129228', // ta config noxa-config
+      response_type: 'code',
+      override_default_response_type: true,
+      extras: {
+        feature: 'whatsapp_embedded_signup',
+        sessionInfoVersion: '3',
+      }
+    });
+  });
+</script>
 
 </body>
 </html>
