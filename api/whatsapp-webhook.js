@@ -6,6 +6,10 @@
 const MERCHANTS = {
   "1235231613010112": {
     name: "Boutique test (numéro Meta)",
+    // ... inchangé
+  },
+  "1321520757705474": {
+    name: "Boutique test (numéro Sénégal)",
     products: [
       { name: "Robe Wax imprimée", price: "15 000 FCFA", imageUrl: "https://noxa-whatsapp.vercel.app/images/robe.jpg" },
       { name: "Ensemble Boubou homme", price: "25 000 FCFA", imageUrl: "https://noxa-whatsapp.vercel.app/images/ensemble.jpg" },
