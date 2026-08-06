@@ -137,6 +137,26 @@ export default async function handler(req, res) {
         return res.status(200).send('OK');
       }
 
+      // Nouveau : gestion des types non supportés
+      if (message.type === 'image' || message.type === 'sticker' || message.type === 'location' || message.type === 'document') {
+        await fetch(
+          `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`,
+            },
+            body: JSON.stringify({
+              messaging_product: 'whatsapp',
+              to: from,
+              text: { body: "Je ne peux pas encore traiter ce type de message. Dites-moi en quelques mots ce qui vous intéresse, je réponds tout de suite ! 😊" },
+            }),
+          }
+        );
+        return res.status(200).send('OK');
+      }
+
       const from = message.from;
       let text = message.text?.body;
 
@@ -206,6 +226,41 @@ export default async function handler(req, res) {
           }),
         }
       );
+
+      let aiData;
+      try {
+        const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+          // ... inchangé
+        });
+        aiData = await aiResponse.json();
+      } catch (err) {
+        console.error('Erreur appel OpenAI:', err);
+        await fetch(/* même structure d'envoi WhatsApp */, {
+          body: JSON.stringify({
+            messaging_product: 'whatsapp',
+            to: from,
+            text: { body: "Petit souci technique de notre côté, on revient vers vous très vite !" },
+          }),
+        });
+        return res.status(200).send('OK');
+      }
+
+      if (message.type === 'audio' && message.audio?.id) {
+        text = await transcribeWhatsAppAudio(message.audio.id);
+
+        if (!text) {
+          await fetch(/* envoi WhatsApp */, {
+            body: JSON.stringify({
+              messaging_product: 'whatsapp',
+              to: from,
+              text: { body: "Je n'ai pas bien compris votre message vocal, pouvez-vous réessayer ou l'écrire en texte ?" },
+            }),
+          });
+          return res.status(200).send('OK');
+        }
+      }
+
+      const replyText = aiData.choices?.[0]?.message?.content || "Désolé, je n'ai pas pu traiter votre message.";
 
       // Nouveau : détecte si un produit précis est mentionné et envoie sa photo
       const mentionedProduct = merchant.products.find(p =>
