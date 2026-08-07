@@ -1,87 +1,73 @@
 // api/whatsapp-webhook.js
 
+function buildProductListText(products) {
+  return products.map(p => {
+    const sizes = p.sizes ? ` — Tailles ${p.sizes.join('/')}` : '';
+    const colors = p.colors ? ` — Couleurs: ${p.colors.join(', ')}` : '';
+    return `- ${p.name}${sizes}${colors} — ${p.price}`;
+  }).join('\n');
+}
+
+function buildSystemPrompt(merchantInfo) {
+  return `Tu es l'assistant WhatsApp de ${merchantInfo.name}, boutique de vêtements à Dakar.
+
+RÈGLE ABSOLUE : N'utilise QUE les informations du catalogue ci-dessous. Si un produit, une taille, une couleur, un prix ou un service n'y figure pas, réponds : "Je n'ai pas cette info précise, on vérifie et je reviens vers vous vite !" Ne jamais inventer un prix, une taille, une couleur ou une disponibilité.
+
+PRODUITS :
+${buildProductListText(merchantInfo.products)}
+
+LIVRAISON : ${merchantInfo.delivery}
+HORAIRES : ${merchantInfo.hours}
+
+GESTION DE L'INTÉRÊT CLIENT :
+Quand le client exprime un intérêt ou veut commander (ex : "je suis intéressé", 
+"je le veux", "ça m'intéresse", "oui"), ne redemande JAMAIS ce qui l'intéresse 
+s'il vient de le dire. Avance directement la conversation :
+1. Confirme le produit, la taille/couleur si applicable, et le prix
+2. Demande sa zone de livraison
+3. Indique que le paiement se fait par Wave (le lien sera envoyé séparément)
+Reste concret et avance vers la commande, ne tourne jamais en rond.
+
+Avant de dire "je n'ai pas cette information", vérifie une dernière fois 
+si le produit ou l'info demandée figure dans la liste PRODUITS ci-dessus, 
+même si la question a déjà été posée ou reformulée différemment. 
+Ne dis "je n'ai pas cette info" que si le produit ou le service n'apparaît 
+vraiment nulle part dans le catalogue fourni.
+
+TON : Chaleureux, direct, mélange naturel français/wolof simple ("Waaw", "am nañu ko", "jërejëf"). Réponses courtes, 2-3 phrases max.`;
+}
+
 const MERCHANTS = {
   "1235231613010112": {
     name: "Boutique test (numéro Meta)",
+    delivery: "Dakar centre 1 500 FCFA, banlieue 2 500 FCFA, gratuite dès 30 000 FCFA",
+    hours: "Lundi-Samedi 9h-19h, fermé dimanche",
     products: [
-      { name: "Robe Wax imprimée", price: "15 000 FCFA", imageUrl: "https://noxa-whatsapp.vercel.app/images/robe.jpg" },
-      { name: "Ensemble Boubou homme", price: "25 000 FCFA", imageUrl: "https://noxa-whatsapp.vercel.app/images/ensemble.jpg" },
-      { name: "Chemise brodée", price: "12 000 FCFA", imageUrl: "https://noxa-whatsapp.vercel.app/images/chemise.jpg" },
-      { name: "Sac à main tissu wax", price: "8 000 FCFA", imageUrl: "https://noxa-whatsapp.vercel.app/images/sac.jpg" },
-      { name: "Turban assorti", price: "3 000 FCFA", imageUrl: "https://noxa-whatsapp.vercel.app/images/turban.jpg" },
+      { name: "Robe Wax imprimée", sizes: ["S", "M", "L"], colors: ["Bleu"], price: "15 000 FCFA", imageUrl: "https://noxa-whatsapp.vercel.app/images/robe.jpg" },
+      { name: "Ensemble Boubou homme", sizes: ["M", "L", "XL"], colors: ["Noir"], price: "25 000 FCFA", imageUrl: "https://noxa-whatsapp.vercel.app/images/ensemble.jpg" },
+      { name: "Chemise brodée", sizes: ["S", "M", "L", "XL"], colors: ["Blanc"], price: "12 000 FCFA", imageUrl: "https://noxa-whatsapp.vercel.app/images/chemise.jpg" },
+      { name: "Sac à main tissu wax", sizes: ["Taille unique"], colors: ["Multicolore"], price: "8 000 FCFA", imageUrl: "https://noxa-whatsapp.vercel.app/images/sac.jpg" },
+      { name: "Turban assorti", sizes: ["Taille unique"], colors: ["Vert"], price: "3 000 FCFA", imageUrl: "https://noxa-whatsapp.vercel.app/images/turban.jpg" },
     ],
-    systemPrompt: `Tu es l'assistant WhatsApp de [Nom boutique], boutique de vêtements à Dakar.
-
-RÈGLE ABSOLUE : N'utilise QUE les informations du catalogue ci-dessous. Si un produit, une taille, un prix ou un service n'y figure pas, réponds : "Je n'ai pas cette info précise, on vérifie et je reviens vers vous vite !" Ne jamais inventer un prix, une taille ou une disponibilité.
-
-PRODUITS :
-- Robe Wax imprimée — Tailles S/M/L — 15 000 FCFA
-- Ensemble Boubou homme — Tailles M/L/XL — 25 000 FCFA
-- Chemise brodée — Tailles S/M/L/XL — 12 000 FCFA
-- Sac à main tissu wax — Taille unique — 8 000 FCFA
-- Turban assorti — Taille unique — 3 000 FCFA
-
-LIVRAISON : Dakar centre 1 500 FCFA, banlieue 2 500 FCFA, gratuite dès 30 000 FCFA
-HORAIRES : Lundi-Samedi 9h-19h, fermé dimanche
-
-GESTION DE L'INTÉRÊT CLIENT :
-Quand le client exprime un intérêt ou veut commander (ex : "je suis intéressé", 
-"je le veux", "ça m'intéresse", "oui"), ne redemande JAMAIS ce qui l'intéresse 
-s'il vient de le dire. Avance directement la conversation :
-1. Confirme le produit et le prix
-2. Demande sa zone de livraison
-3. Indique que le paiement se fait par Wave (le lien sera envoyé séparément)
-Reste concret et avance vers la commande, ne tourne jamais en rond.
-
-Avant de dire "je n'ai pas cette information", vérifie une dernière fois 
-si le produit ou l'info demandée figure dans la liste PRODUITS ci-dessus, 
-même si la question a déjà été posée ou reformulée différemment. 
-Ne dis "je n'ai pas cette info" que si le produit ou le service n'apparaît 
-vraiment nulle part dans le catalogue fourni.
-
-TON : Chaleureux, direct, mélange naturel français/wolof simple ("Waaw", "am nañu ko", "jërejëf"). Réponses courtes, 2-3 phrases max.`,
   },
   "1321520757705474": {
     name: "Boutique test (numéro Sénégal)",
+    delivery: "Dakar centre 1 500 FCFA, banlieue 2 500 FCFA, gratuite dès 30 000 FCFA",
+    hours: "Lundi-Samedi 9h-19h, fermé dimanche",
     products: [
-      { name: "Robe Wax imprimée", price: "15 000 FCFA", imageUrl: "https://noxa-whatsapp.vercel.app/images/robe.jpg" },
-      { name: "Ensemble Boubou homme", price: "25 000 FCFA", imageUrl: "https://noxa-whatsapp.vercel.app/images/ensemble.jpg" },
-      { name: "Chemise brodée", price: "12 000 FCFA", imageUrl: "https://noxa-whatsapp.vercel.app/images/chemise.jpg" },
-      { name: "Sac à main tissu wax", price: "8 000 FCFA", imageUrl: "https://noxa-whatsapp.vercel.app/images/sac.jpg" },
-      { name: "Turban assorti", price: "3 000 FCFA", imageUrl: "https://noxa-whatsapp.vercel.app/images/turban.jpg" },
+      { name: "Robe Wax imprimée", sizes: ["S", "M", "L"], colors: ["Bleu"], price: "15 000 FCFA", imageUrl: "https://noxa-whatsapp.vercel.app/images/robe.jpg" },
+      { name: "Ensemble Boubou homme", sizes: ["M", "L", "XL"], colors: ["Noir"], price: "25 000 FCFA", imageUrl: "https://noxa-whatsapp.vercel.app/images/ensemble.jpg" },
+      { name: "Chemise brodée", sizes: ["S", "M", "L", "XL"], colors: ["Blanc"], price: "12 000 FCFA", imageUrl: "https://noxa-whatsapp.vercel.app/images/chemise.jpg" },
+      { name: "Sac à main tissu wax", sizes: ["Taille unique"], colors: ["Multicolore"], price: "8 000 FCFA", imageUrl: "https://noxa-whatsapp.vercel.app/images/sac.jpg" },
+      { name: "Turban assorti", sizes: ["Taille unique"], colors: ["Vert"], price: "3 000 FCFA", imageUrl: "https://noxa-whatsapp.vercel.app/images/turban.jpg" },
     ],
-    systemPrompt: `Tu es l'assistant WhatsApp de [Nom boutique], boutique de vêtements à Dakar.
-
-RÈGLE ABSOLUE : N'utilise QUE les informations du catalogue ci-dessous. Si un produit, une taille, un prix ou un service n'y figure pas, réponds : "Je n'ai pas cette info précise, on vérifie et je reviens vers vous vite !" Ne jamais inventer un prix, une taille ou une disponibilité.
-
-PRODUITS :
-- Robe Wax imprimée — Tailles S/M/L — 15 000 FCFA
-- Ensemble Boubou homme — Tailles M/L/XL — 25 000 FCFA
-- Chemise brodée — Tailles S/M/L/XL — 12 000 FCFA
-- Sac à main tissu wax — Taille unique — 8 000 FCFA
-- Turban assorti — Taille unique — 3 000 FCFA
-
-LIVRAISON : Dakar centre 1 500 FCFA, banlieue 2 500 FCFA, gratuite dès 30 000 FCFA
-HORAIRES : Lundi-Samedi 9h-19h, fermé dimanche
-
-GESTION DE L'INTÉRÊT CLIENT :
-Quand le client exprime un intérêt ou veut commander (ex : "je suis intéressé", 
-"je le veux", "ça m'intéresse", "oui"), ne redemande JAMAIS ce qui l'intéresse 
-s'il vient de le dire. Avance directement la conversation :
-1. Confirme le produit et le prix
-2. Demande sa zone de livraison
-3. Indique que le paiement se fait par Wave (le lien sera envoyé séparément)
-Reste concret et avance vers la commande, ne tourne jamais en rond.
-
-Avant de dire "je n'ai pas cette information", vérifie une dernière fois 
-si le produit ou l'info demandée figure dans la liste PRODUITS ci-dessus, 
-même si la question a déjà été posée ou reformulée différemment. 
-Ne dis "je n'ai pas cette info" que si le produit ou le service n'apparaît 
-vraiment nulle part dans le catalogue fourni.
-
-TON : Chaleureux, direct, mélange naturel français/wolof simple ("Waaw", "am nañu ko", "jërejëf"). Réponses courtes, 2-3 phrases max.`,
   },
 };
+
+// Génère le systemPrompt de chaque commerçant automatiquement à partir de ses produits
+Object.values(MERCHANTS).forEach(m => {
+  m.systemPrompt = buildSystemPrompt(m);
+});
 
 const conversationHistory = {};
 
