@@ -98,8 +98,8 @@ const MERCHANTS = {
   },
   "1321520757705474": {
     name: "Boutique test (numéro Sénégal)",
-    ownerWhatsApp: "221781178874", // à remplacer par le vrai numéro du commerçant
-    wavePaymentNumber: "221781178874", // à remplacer par le vrai numéro Wave du commerçant
+    ownerWhatsApp: "33664017511", // à remplacer par le vrai numéro du commerçant
+    wavePaymentNumber: "33664017511", // à remplacer par le vrai numéro Wave du commerçant
     delivery: "Dakar centre 1 500 FCFA, banlieue 2 500 FCFA, gratuite dès 30 000 FCFA",
     hours: "Lundi-Samedi 9h-19h, fermé dimanche",
     products: [
