@@ -41,6 +41,16 @@ produit du catalogue, ne dis pas simplement "je n'ai pas cette info" —
 propose activement les couleurs/tailles réellement disponibles pour ce 
 produit.
 
+GESTION DES PHOTOS :
+Quand tu réponds à propos d'un produit qui a plusieurs couleurs, termine 
+TOUJOURS ta réponse par un marqueur sur sa propre ligne, jamais visible ou 
+mentionné au client :
+- Si le client a choisi une couleur précise : [PHOTO: couleur=NomCouleur]
+- Si le client veut voir toutes les couleurs (ex: "toutes", "je veux voir", 
+  "montre-moi", "les deux") : [PHOTO: toutes]
+- Si aucune couleur n'est encore choisie et qu'il n'a pas demandé à voir : 
+  n'ajoute aucun marqueur
+
 TON : Chaleureux, direct, mélange naturel français/wolof simple ("Waaw", "am nañu ko", "jërejëf"). Réponses courtes, 2-3 phrases max.`;
 }
 
@@ -55,7 +65,7 @@ const MERCHANTS = {
         sizes: ["S", "M", "L"],
         colorVariants: [
           { color: "Bleu", imageUrl: "https://noxa-whatsapp.vercel.app/images/robe-bleu.jpg" },
-          { color: "noir", imageUrl: "https://noxa-whatsapp.vercel.app/images/robe-noir.jpg" },
+          { color: "Noir", imageUrl: "https://noxa-whatsapp.vercel.app/images/robe-noir.jpg" },
           { color: "Rouge", imageUrl: "https://noxa-whatsapp.vercel.app/images/robe-rouge.jpg" },
         ],
         price: "15 000 FCFA",
@@ -271,23 +281,25 @@ export default async function handler(req, res) {
 
       await sendWhatsAppText(phoneNumberId, from, replyText);
 
-      const ALL_COLORS_KEYWORDS = ['toutes les couleurs', 'toutes couleurs', 'toutes les couleur', 'voir toutes', 'montre toutes', 'montre moi toutes'];
+      const photoMatch = replyText.match(/\[PHOTO:\s*(.+?)\]/);
+      const clientReplyText = replyText.replace(/\[PHOTO:.+?\]/, '').trim();
 
       const mentionedProduct = merchant.products.find(p =>
-        replyText.toLowerCase().includes(p.name.toLowerCase().split(' ')[0])
+        clientReplyText.toLowerCase().includes(p.name.toLowerCase().split(' ')[0])
       );
 
-      if (mentionedProduct) {
-        const clientWantsAllColors = ALL_COLORS_KEYWORDS.some(kw => text.toLowerCase().includes(kw));
+      if (mentionedProduct && photoMatch) {
+        const instruction = photoMatch[1].trim();
 
         if (mentionedProduct.colorVariants) {
-          if (clientWantsAllColors) {
+          if (instruction === 'toutes') {
             for (const variant of mentionedProduct.colorVariants) {
               await sendWhatsAppImage(phoneNumberId, from, variant.imageUrl, `${mentionedProduct.name} (${variant.color}) — ${mentionedProduct.price}`);
             }
-          } else {
+          } else if (instruction.startsWith('couleur=')) {
+            const colorName = instruction.replace('couleur=', '').trim();
             const matchedColor = mentionedProduct.colorVariants.find(c =>
-              text.toLowerCase().includes(c.color.toLowerCase())
+              c.color.toLowerCase() === colorName.toLowerCase()
             );
             if (matchedColor) {
               await sendWhatsAppImage(phoneNumberId, from, matchedColor.imageUrl, `${mentionedProduct.name} (${matchedColor.color}) — ${mentionedProduct.price}`);
