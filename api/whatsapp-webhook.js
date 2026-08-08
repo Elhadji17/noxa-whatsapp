@@ -26,7 +26,8 @@ Quand le client exprime un intérêt ou veut commander (ex : "je suis intéress�
 s'il vient de le dire. Avance directement la conversation :
 1. Confirme le produit, la taille/couleur si applicable, et le prix
 2. Demande sa zone de livraison
-3. Indique que le paiement se fait par Wave (le lien sera envoyé séparément)
+3. Une fois la zone connue, annonce le paiement par Wave : dis au client de 
+   payer via l'application Wave, en entrant ce numéro : ${merchantInfo.wavePaymentNumber}
 Reste concret et avance vers la commande, ne tourne jamais en rond.
 
 Avant de dire "je n'ai pas cette information", vérifie une dernière fois 
@@ -51,12 +52,23 @@ mentionné au client :
 - Si aucune couleur n'est encore choisie et qu'il n'a pas demandé à voir : 
   n'ajoute aucun marqueur
 
+GESTION DE LA CONFIRMATION DE COMMANDE :
+Quand une commande est réellement confirmée (produit + taille/couleur + 
+zone de livraison connus, client d'accord pour commander, tu viens de lui 
+donner les instructions de paiement Wave), termine ta réponse par ce 
+marqueur exact sur sa propre ligne, jamais visible ou mentionné au client :
+[COMMANDE: produit=NOM; zone=ZONE; total=MONTANT]
+N'ajoute ce marqueur qu'une seule fois par commande, pas à chaque message 
+qui suit.
+
 TON : Chaleureux, direct, mélange naturel français/wolof simple ("Waaw", "am nañu ko", "jërejëf"). Réponses courtes, 2-3 phrases max.`;
 }
 
 const MERCHANTS = {
   "1235231613010112": {
     name: "Boutique test (numéro Meta)",
+    ownerWhatsApp: "221781178874", // à remplacer par le vrai numéro du commerçant
+    wavePaymentNumber: "221781178874", // à remplacer par le vrai numéro Wave du commerçant
     delivery: "Dakar centre 1 500 FCFA, banlieue 2 500 FCFA, gratuite dès 30 000 FCFA",
     hours: "Lundi-Samedi 9h-19h, fermé dimanche",
     products: [
@@ -86,6 +98,8 @@ const MERCHANTS = {
   },
   "1321520757705474": {
     name: "Boutique test (numéro Sénégal)",
+    ownerWhatsApp: "221781178874", // à remplacer par le vrai numéro du commerçant
+    wavePaymentNumber: "221781178874", // à remplacer par le vrai numéro Wave du commerçant
     delivery: "Dakar centre 1 500 FCFA, banlieue 2 500 FCFA, gratuite dès 30 000 FCFA",
     hours: "Lundi-Samedi 9h-19h, fermé dimanche",
     products: [
@@ -115,7 +129,6 @@ const MERCHANTS = {
   },
 };
 
-// Génère le systemPrompt de chaque commerçant automatiquement à partir de ses produits
 Object.values(MERCHANTS).forEach(m => {
   m.systemPrompt = buildSystemPrompt(m);
 });
@@ -280,13 +293,21 @@ export default async function handler(req, res) {
 
       conversationHistory[conversationKey].push({ role: 'assistant', content: replyText });
 
-      await sendWhatsAppText(phoneNumberId, from, replyText);
-
+      // Détecte les marqueurs cachés (photo + commande) avant de nettoyer le texte
       const photoMatch = replyText.match(/\[PHOTO:\s*(.+?)\]/);
-      const clientReplyText = replyText.replace(/\[PHOTO:.+?\]/, '').trim();
+      const orderMatch = replyText.match(/\[COMMANDE:\s*(.+?)\]/);
 
+      let finalClientText = replyText
+        .replace(/\[PHOTO:.+?\]/, '')
+        .replace(/\[COMMANDE:.+?\]/, '')
+        .trim();
+
+      // Envoie le texte nettoyé (sans marqueurs) au client
+      await sendWhatsAppText(phoneNumberId, from, finalClientText);
+
+      // Gestion de l'envoi de photo
       const mentionedProduct = merchant.products.find(p =>
-        clientReplyText.toLowerCase().includes(p.name.toLowerCase().split(' ')[0])
+        finalClientText.toLowerCase().includes(p.name.toLowerCase().split(' ')[0])
       );
 
       if (mentionedProduct && photoMatch) {
@@ -309,6 +330,15 @@ export default async function handler(req, res) {
         } else {
           await sendWhatsAppImage(phoneNumberId, from, mentionedProduct.imageUrl, `${mentionedProduct.name} — ${mentionedProduct.price}`);
         }
+      }
+
+      // Notifie le commerçant si une commande vient d'être confirmée
+      if (orderMatch && merchant.ownerWhatsApp) {
+        await sendWhatsAppText(
+          phoneNumberId,
+          merchant.ownerWhatsApp,
+          `🛍️ Nouvelle commande !\n${orderMatch[1]}\nClient: ${from}\n\nVérifiez votre app Wave pour confirmer la réception du paiement avant de valider.`
+        );
       }
 
       return res.status(200).send('OK');
