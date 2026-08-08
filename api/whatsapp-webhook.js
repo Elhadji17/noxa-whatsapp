@@ -98,8 +98,8 @@ const MERCHANTS = {
   },
   "1321520757705474": {
     name: "Boutique test (numéro Sénégal)",
-    ownerWhatsApp: "33664017511", // à remplacer par le vrai numéro du commerçant
-    wavePaymentNumber: "33664017511", // à remplacer par le vrai numéro Wave du commerçant
+    ownerWhatsApp: "221781178874", // à remplacer par le vrai numéro du commerçant
+    wavePaymentNumber: "221781178874", // à remplacer par le vrai numéro Wave du commerçant
     delivery: "Dakar centre 1 500 FCFA, banlieue 2 500 FCFA, gratuite dès 30 000 FCFA",
     hours: "Lundi-Samedi 9h-19h, fermé dimanche",
     products: [
@@ -312,24 +312,27 @@ export default async function handler(req, res) {
         finalClientText.toLowerCase().includes(p.name.toLowerCase().split(' ')[0])
       );
 
-      if (mentionedProduct && photoMatch) {
-        const instruction = photoMatch[1].trim();
-
+      if (mentionedProduct) {
         if (mentionedProduct.colorVariants) {
-          if (instruction === 'toutes') {
-            for (const variant of mentionedProduct.colorVariants) {
-              await sendWhatsAppImage(phoneNumberId, from, variant.imageUrl, `${mentionedProduct.name} (${variant.color}) — ${mentionedProduct.price}`);
-            }
-          } else if (instruction.startsWith('couleur=')) {
-            const colorName = instruction.replace('couleur=', '').trim();
-            const matchedColor = mentionedProduct.colorVariants.find(c =>
-              c.color.toLowerCase() === colorName.toLowerCase()
-            );
-            if (matchedColor) {
-              await sendWhatsAppImage(phoneNumberId, from, matchedColor.imageUrl, `${mentionedProduct.name} (${matchedColor.color}) — ${mentionedProduct.price}`);
+          // Produit à plusieurs couleurs : on attend le marqueur de l'IA
+          if (photoMatch) {
+            const instruction = photoMatch[1].trim();
+            if (instruction === 'toutes') {
+              for (const variant of mentionedProduct.colorVariants) {
+                await sendWhatsAppImage(phoneNumberId, from, variant.imageUrl, `${mentionedProduct.name} (${variant.color}) — ${mentionedProduct.price}`);
+              }
+            } else if (instruction.startsWith('couleur=')) {
+              const colorName = instruction.replace('couleur=', '').trim();
+              const matchedColor = mentionedProduct.colorVariants.find(c =>
+                c.color.toLowerCase() === colorName.toLowerCase()
+              );
+              if (matchedColor) {
+                await sendWhatsAppImage(phoneNumberId, from, matchedColor.imageUrl, `${mentionedProduct.name} (${matchedColor.color}) — ${mentionedProduct.price}`);
+              }
             }
           }
         } else {
+          // Produit à une seule couleur : toujours envoyer dès que mentionné, sans condition
           await sendWhatsAppImage(phoneNumberId, from, mentionedProduct.imageUrl, `${mentionedProduct.name} — ${mentionedProduct.price}`);
         }
       }
