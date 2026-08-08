@@ -3,7 +3,8 @@
 function buildProductListText(products) {
   return products.map(p => {
     const sizes = p.sizes ? ` — Tailles ${p.sizes.join('/')}` : '';
-    const colors = p.colors ? ` — Couleurs: ${p.colors.join(', ')}` : '';
+    const colorNames = p.colorVariants ? p.colorVariants.map(c => c.color) : (p.colors || []);
+    const colors = colorNames.length ? ` — Couleurs: ${colorNames.join(', ')}` : '';
     return `- ${p.name}${sizes}${colors} — ${p.price}`;
   }).join('\n');
 }
@@ -34,6 +35,12 @@ même si la question a déjà été posée ou reformulée différemment.
 Ne dis "je n'ai pas cette info" que si le produit ou le service n'apparaît 
 vraiment nulle part dans le catalogue fourni.
 
+GESTION DES COULEURS/TAILLES INDISPONIBLES :
+Si un client demande une couleur ou une taille qui n'existe pas pour un 
+produit du catalogue, ne dis pas simplement "je n'ai pas cette info" — 
+propose activement les couleurs/tailles réellement disponibles pour ce 
+produit.
+
 TON : Chaleureux, direct, mélange naturel français/wolof simple ("Waaw", "am nañu ko", "jërejëf"). Réponses courtes, 2-3 phrases max.`;
 }
 
@@ -43,8 +50,25 @@ const MERCHANTS = {
     delivery: "Dakar centre 1 500 FCFA, banlieue 2 500 FCFA, gratuite dès 30 000 FCFA",
     hours: "Lundi-Samedi 9h-19h, fermé dimanche",
     products: [
-      { name: "Robe Wax imprimée", sizes: ["S", "M", "L"], colors: ["Bleu"], price: "15 000 FCFA", imageUrl: "https://noxa-whatsapp.vercel.app/images/robe.jpg" },
-      { name: "Ensemble Boubou homme", sizes: ["M", "L", "XL"], colors: ["Noir"], price: "25 000 FCFA", imageUrl: "https://noxa-whatsapp.vercel.app/images/ensemble.jpg" },
+      {
+        name: "Robe Wax imprimée",
+        sizes: ["S", "M", "L"],
+        colorVariants: [
+          { color: "Bleu", imageUrl: "https://noxa-whatsapp.vercel.app/images/robe-bleu.jpg" },
+          { color: "Rouge", imageUrl: "https://noxa-whatsapp.vercel.app/images/robe-noir.jpg" },
+          { color: "Rouge", imageUrl: "https://noxa-whatsapp.vercel.app/images/robe-rouge.jpg" },
+        ],
+        price: "15 000 FCFA",
+      },
+      {
+        name: "Ensemble Boubou homme",
+        sizes: ["M", "L", "XL"],
+        colorVariants: [
+          { color: "Noir", imageUrl: "https://noxa-whatsapp.vercel.app/images/ensemble-noir.jpg" },
+          { color: "Blanc", imageUrl: "https://noxa-whatsapp.vercel.app/images/ensemble-bleu.jpg" },
+        ],
+        price: "25 000 FCFA",
+      },
       { name: "Chemise brodée", sizes: ["S", "M", "L", "XL"], colors: ["Blanc"], price: "12 000 FCFA", imageUrl: "https://noxa-whatsapp.vercel.app/images/chemise.jpg" },
       { name: "Sac à main tissu wax", sizes: ["Taille unique"], colors: ["Multicolore"], price: "8 000 FCFA", imageUrl: "https://noxa-whatsapp.vercel.app/images/sac.jpg" },
       { name: "Turban assorti", sizes: ["Taille unique"], colors: ["Vert"], price: "3 000 FCFA", imageUrl: "https://noxa-whatsapp.vercel.app/images/turban.jpg" },
@@ -55,8 +79,24 @@ const MERCHANTS = {
     delivery: "Dakar centre 1 500 FCFA, banlieue 2 500 FCFA, gratuite dès 30 000 FCFA",
     hours: "Lundi-Samedi 9h-19h, fermé dimanche",
     products: [
-      { name: "Robe Wax imprimée", sizes: ["S", "M", "L"], colors: ["Bleu"], price: "15 000 FCFA", imageUrl: "https://noxa-whatsapp.vercel.app/images/robe.jpg" },
-      { name: "Ensemble Boubou homme", sizes: ["M", "L", "XL"], colors: ["Noir"], price: "25 000 FCFA", imageUrl: "https://noxa-whatsapp.vercel.app/images/ensemble.jpg" },
+      {
+        name: "Robe Wax imprimée",
+        sizes: ["S", "M", "L"],
+        colorVariants: [
+          { color: "Bleu", imageUrl: "https://noxa-whatsapp.vercel.app/images/robe-bleu.jpg" },
+          { color: "Rouge", imageUrl: "https://noxa-whatsapp.vercel.app/images/robe-rouge.jpg" },
+        ],
+        price: "15 000 FCFA",
+      },
+      {
+        name: "Ensemble Boubou homme",
+        sizes: ["M", "L", "XL"],
+        colorVariants: [
+          { color: "Noir", imageUrl: "https://noxa-whatsapp.vercel.app/images/ensemble-noir.jpg" },
+          { color: "Blanc", imageUrl: "https://noxa-whatsapp.vercel.app/images/ensemble-blanc.jpg" },
+        ],
+        price: "25 000 FCFA",
+      },
       { name: "Chemise brodée", sizes: ["S", "M", "L", "XL"], colors: ["Blanc"], price: "12 000 FCFA", imageUrl: "https://noxa-whatsapp.vercel.app/images/chemise.jpg" },
       { name: "Sac à main tissu wax", sizes: ["Taille unique"], colors: ["Multicolore"], price: "8 000 FCFA", imageUrl: "https://noxa-whatsapp.vercel.app/images/sac.jpg" },
       { name: "Turban assorti", sizes: ["Taille unique"], colors: ["Vert"], price: "3 000 FCFA", imageUrl: "https://noxa-whatsapp.vercel.app/images/turban.jpg" },
@@ -236,7 +276,20 @@ export default async function handler(req, res) {
       );
 
       if (mentionedProduct) {
-        await sendWhatsAppImage(phoneNumberId, from, mentionedProduct.imageUrl, `${mentionedProduct.name} — ${mentionedProduct.price}`);
+        let imageToSend = mentionedProduct.colorVariants
+          ? mentionedProduct.colorVariants[0].imageUrl
+          : mentionedProduct.imageUrl;
+
+        if (mentionedProduct.colorVariants) {
+          const matchedColor = mentionedProduct.colorVariants.find(c =>
+            replyText.toLowerCase().includes(c.color.toLowerCase())
+          );
+          if (matchedColor) {
+            imageToSend = matchedColor.imageUrl;
+          }
+        }
+
+        await sendWhatsAppImage(phoneNumberId, from, imageToSend, `${mentionedProduct.name} — ${mentionedProduct.price}`);
       }
 
       return res.status(200).send('OK');
