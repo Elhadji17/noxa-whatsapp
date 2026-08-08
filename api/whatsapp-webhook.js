@@ -296,6 +296,8 @@ export default async function handler(req, res) {
       // Détecte les marqueurs cachés (photo + commande) avant de nettoyer le texte
       const photoMatch = replyText.match(/\[PHOTO:\s*(.+?)\]/);
       const orderMatch = replyText.match(/\[COMMANDE:\s*(.+?)\]/);
+      console.log('DEBUG - replyText complet:', replyText);
+      console.log('DEBUG - orderMatch trouvé:', orderMatch ? orderMatch[1] : 'AUCUN');
 
       let finalClientText = replyText
         .replace(/\[PHOTO:.+?\]/, '')
