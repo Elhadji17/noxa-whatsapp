@@ -75,7 +75,7 @@ const MERCHANTS = {
         sizes: ["M", "L", "XL"],
         colorVariants: [
           { color: "Noir", imageUrl: "https://noxa-whatsapp.vercel.app/images/ensemble-noir.jpg" },
-          { color: "Blanc", imageUrl: "https://noxa-whatsapp.vercel.app/images/ensemble-bleu.jpg" },
+          { color: "Bleu", imageUrl: "https://noxa-whatsapp.vercel.app/images/ensemble-bleu.jpg" },
         ],
         price: "25 000 FCFA",
       },
@@ -95,6 +95,7 @@ const MERCHANTS = {
         colorVariants: [
           { color: "Bleu", imageUrl: "https://noxa-whatsapp.vercel.app/images/robe-bleu.jpg" },
           { color: "Rouge", imageUrl: "https://noxa-whatsapp.vercel.app/images/robe-rouge.jpg" },
+          { color: "Noir", imageUrl: "https://noxa-whatsapp.vercel.app/images/robe-noir.jpg" },
         ],
         price: "15 000 FCFA",
       },
@@ -103,7 +104,7 @@ const MERCHANTS = {
         sizes: ["M", "L", "XL"],
         colorVariants: [
           { color: "Noir", imageUrl: "https://noxa-whatsapp.vercel.app/images/ensemble-noir.jpg" },
-          { color: "Blanc", imageUrl: "https://noxa-whatsapp.vercel.app/images/ensemble-blanc.jpg" },
+          { color: "Bleu", imageUrl: "https://noxa-whatsapp.vercel.app/images/ensemble-bleu.jpg" },
         ],
         price: "25 000 FCFA",
       },
