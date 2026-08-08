@@ -55,7 +55,7 @@ const MERCHANTS = {
         sizes: ["S", "M", "L"],
         colorVariants: [
           { color: "Bleu", imageUrl: "https://noxa-whatsapp.vercel.app/images/robe-bleu.jpg" },
-          { color: "Rouge", imageUrl: "https://noxa-whatsapp.vercel.app/images/robe-noir.jpg" },
+          { color: "noir", imageUrl: "https://noxa-whatsapp.vercel.app/images/robe-noir.jpg" },
           { color: "Rouge", imageUrl: "https://noxa-whatsapp.vercel.app/images/robe-rouge.jpg" },
         ],
         price: "15 000 FCFA",
@@ -271,25 +271,31 @@ export default async function handler(req, res) {
 
       await sendWhatsAppText(phoneNumberId, from, replyText);
 
+      const ALL_COLORS_KEYWORDS = ['toutes les couleurs', 'toutes couleurs', 'toutes les couleur', 'voir toutes', 'montre toutes', 'montre moi toutes'];
+
       const mentionedProduct = merchant.products.find(p =>
         replyText.toLowerCase().includes(p.name.toLowerCase().split(' ')[0])
       );
 
       if (mentionedProduct) {
-        let imageToSend = mentionedProduct.colorVariants
-          ? mentionedProduct.colorVariants[0].imageUrl
-          : mentionedProduct.imageUrl;
+        const clientWantsAllColors = ALL_COLORS_KEYWORDS.some(kw => text.toLowerCase().includes(kw));
 
         if (mentionedProduct.colorVariants) {
-          const matchedColor = mentionedProduct.colorVariants.find(c =>
-            replyText.toLowerCase().includes(c.color.toLowerCase())
-          );
-          if (matchedColor) {
-            imageToSend = matchedColor.imageUrl;
+          if (clientWantsAllColors) {
+            for (const variant of mentionedProduct.colorVariants) {
+              await sendWhatsAppImage(phoneNumberId, from, variant.imageUrl, `${mentionedProduct.name} (${variant.color}) — ${mentionedProduct.price}`);
+            }
+          } else {
+            const matchedColor = mentionedProduct.colorVariants.find(c =>
+              text.toLowerCase().includes(c.color.toLowerCase())
+            );
+            if (matchedColor) {
+              await sendWhatsAppImage(phoneNumberId, from, matchedColor.imageUrl, `${mentionedProduct.name} (${matchedColor.color}) — ${mentionedProduct.price}`);
+            }
           }
+        } else {
+          await sendWhatsAppImage(phoneNumberId, from, mentionedProduct.imageUrl, `${mentionedProduct.name} — ${mentionedProduct.price}`);
         }
-
-        await sendWhatsAppImage(phoneNumberId, from, imageToSend, `${mentionedProduct.name} — ${mentionedProduct.price}`);
       }
 
       return res.status(200).send('OK');
