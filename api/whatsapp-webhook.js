@@ -336,11 +336,23 @@ export default async function handler(req, res) {
 
       // Notifie le commerçant si une commande vient d'être confirmée
       if (orderMatch && merchant.ownerWhatsApp) {
-        await sendWhatsAppText(
-          phoneNumberId,
-          merchant.ownerWhatsApp,
-          `🛍️ Nouvelle commande !\n${orderMatch[1]}\nClient: ${from}\n\nVérifiez votre app Wave pour confirmer la réception du paiement avant de valider.`
+        const notifResponse = await fetch(
+          `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`,
+            },
+            body: JSON.stringify({
+              messaging_product: 'whatsapp',
+              to: merchant.ownerWhatsApp,
+              text: { body: `🛍️ Nouvelle commande !\n${orderMatch[1]}\nClient: ${from}\n\nVérifiez votre app Wave pour confirmer la réception du paiement avant de valider.` },
+            }),
+          }
         );
+        const notifData = await notifResponse.json();
+        console.log('DEBUG - Résultat notification commerçant:', JSON.stringify(notifData));
       }
 
       return res.status(200).send('OK');
