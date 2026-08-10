@@ -369,8 +369,11 @@ export default async function handler(req, res) {
           // Filet de sécurité : si l'IA n'a pas mis de marqueur, on vérifie
           // nous-mêmes si le CLIENT a mentionné une couleur précise
           if (!instruction) {
-            const clientColor = mentionedProduct.colorVariants.find(c =>
-              text.toLowerCase().includes(c.color.toLowerCase())
+                      const clientTextLower = text.toLowerCase();
+          const clientColor = mentionedProduct.colorVariants.find(c => {
+            const colorLower = c.color.toLowerCase();
+            return clientTextLower.includes(colorLower) || colorLower.includes(clientTextLower);
+          }
             );
             if (clientColor) {
               instruction = `couleur=${clientColor.color}`;
