@@ -63,6 +63,11 @@ marqueur exact sur sa propre ligne, jamais visible ou mentionné au client :
 N'ajoute ce marqueur qu'une seule fois par commande, pas à chaque message 
 qui suit.
 
+Ne dis JAMAIS que tu n'as pas de photo disponible — tu en as toujours pour 
+les produits du catalogue. Utilise systématiquement le marqueur [PHOTO: ...] 
+dès qu'une couleur est connue (même choisie plus tôt dans la conversation) 
+ou que le client redemande à la voir.
+
 TON : Chaleureux, direct, mélange naturel français/wolof simple ("Waaw", "am nañu ko", "jërejëf"). Réponses courtes, 2-3 phrases max.`;
 }
 
@@ -366,33 +371,23 @@ export default async function handler(req, res) {
         if (mentionedProduct.colorVariants) {
           let instruction = photoMatch ? photoMatch[1].trim() : null;
 
-          // Filet de sécurité : si l'IA n'a pas mis de marqueur, on vérifie
-          // nous-mêmes si le CLIENT a mentionné une couleur précise
           if (!instruction) {
-                      const clientTextLower = text.toLowerCase();
-          const clientColor = mentionedProduct.colorVariants.find(c => {
-            const colorLower = c.color.toLowerCase();
-            return clientTextLower.includes(colorLower) || colorLower.includes(clientTextLower);
-          }
-            );
+            const clientTextLower = text.toLowerCase();
+            const clientColor = mentionedProduct.colorVariants.find(c => {
+              const colorLower = c.color.toLowerCase();
+              return clientTextLower.includes(colorLower) || colorLower.includes(clientTextLower);
+            });
             if (clientColor) {
               instruction = `couleur=${clientColor.color}`;
+              lastColorPerConversation[conversationKey] = clientColor.color; // on mémorise
+            } else if (lastColorPerConversation[conversationKey]) {
+              // Aucune couleur dans ce message, mais une était déjà choisie avant
+              instruction = `couleur=${lastColorPerConversation[conversationKey]}`;
             }
+          } else if (instruction.startsWith('couleur=')) {
+            lastColorPerConversation[conversationKey] = instruction.replace('couleur=', '').trim();
           }
 
-          if (instruction === 'toutes') {
-            for (const variant of mentionedProduct.colorVariants) {
-              await sendWhatsAppImage(phoneNumberId, from, variant.imageUrl, `${mentionedProduct.name} (${variant.color}) — ${mentionedProduct.price}`);
-            }
-          } else if (instruction && instruction.startsWith('couleur=')) {
-            const colorName = instruction.replace('couleur=', '').trim();
-            const matchedColor = mentionedProduct.colorVariants.find(c =>
-              c.color.toLowerCase() === colorName.toLowerCase()
-            );
-            if (matchedColor) {
-              await sendWhatsAppImage(phoneNumberId, from, matchedColor.imageUrl, `${mentionedProduct.name} (${matchedColor.color}) — ${mentionedProduct.price}`);
-            }
-          }
         } else {
           await sendWhatsAppImage(phoneNumberId, from, mentionedProduct.imageUrl, `${mentionedProduct.name} — ${mentionedProduct.price}`);
         }
