@@ -3,12 +3,14 @@
 function buildProductListText(products) {
   return products.map(p => {
     const sizes = p.sizes ? ` — Tailles ${p.sizes.join('/')}` : '';
-    const colorNames = p.colorVariants ? p.colorVariants.map(c => c.color) : (p.colors || []);
+    let colorNames = [];
+    if (p.colorVariants) colorNames = colorNames.concat(p.colorVariants.map(c => c.color));
+    if (p.extraColors) colorNames = colorNames.concat(p.extraColors);
+    if (!p.colorVariants && p.colors) colorNames = p.colors;
     const colors = colorNames.length ? ` — Couleurs: ${colorNames.join(', ')}` : '';
     return `- ${p.name}${sizes}${colors} — ${p.price}`;
   }).join('\n');
 }
-
 function buildSystemPrompt(merchantInfo) {
   return `Tu es l'assistant WhatsApp de ${merchantInfo.name}, boutique de vêtements à Dakar.
 
@@ -65,37 +67,83 @@ TON : Chaleureux, direct, mélange naturel français/wolof simple ("Waaw", "am n
 }
 
 const MERCHANTS = {
-  "1235231613010112": {
-    name: "Boutique test (numéro Meta)",
-    ownerWhatsApp: "221781178874", // à remplacer par le vrai numéro du commerçant
-    wavePaymentNumber: "221781178874", // à remplacer par le vrai numéro Wave du commerçant
-    delivery: "Dakar centre 1 500 FCFA, banlieue 2 500 FCFA, gratuite dès 30 000 FCFA",
-    hours: "Lundi-Samedi 9h-19h, fermé dimanche",
-    products: [
-      {
-        name: "Robe Wax imprimée",
-        sizes: ["S", "M", "L"],
-        colorVariants: [
-          { color: "Bleu", imageUrl: "https://noxa-whatsapp.vercel.app/images/robe-bleu.jpg" },
-          { color: "Rouge", imageUrl: "https://noxa-whatsapp.vercel.app/images/robe-rouge-v2.jpg" },
-          { color: "Noir", imageUrl: "https://noxa-whatsapp.vercel.app/images/robe-noir.jpg" },
-        ],
-        price: "15 000 FCFA",
-      },
-      {
-        name: "Ensemble Boubou homme",
-        sizes: ["M", "L", "XL"],
-        colorVariants: [
-          { color: "Noir", imageUrl: "https://noxa-whatsapp.vercel.app/images/ensemble-noir.jpg" },
-          { color: "Bleu", imageUrl: "https://noxa-whatsapp.vercel.app/images/ensemble-bleu.jpg" },
-        ],
-        price: "25 000 FCFA",
-      },
-      { name: "Chemise brodée", sizes: ["S", "M", "L", "XL"], colors: ["Blanc"], price: "12 000 FCFA", imageUrl: "https://noxa-whatsapp.vercel.app/images/chemise.jpg" },
-      { name: "Sac à main tissu wax", sizes: ["Taille unique"], colors: ["Multicolore"], price: "8 000 FCFA", imageUrl: "https://noxa-whatsapp.vercel.app/images/sac.jpg" },
-      { name: "Turban assorti", sizes: ["Taille unique"], colors: ["Vert"], price: "3 000 FCFA", imageUrl: "https://noxa-whatsapp.vercel.app/images/turban.jpg" },
-    ],
-  },
+  "1291978550658723": {
+  name: "AD Shoes",
+  ownerWhatsApp: "33664017511",
+  wavePaymentNumber: "221781645041",
+  delivery: "Dakar Centre/Plateau/Médina 1 500 FCFA, Sacré-Cœur/Mermoz/Ouakam/Yoff/Maristes 1 500 FCFA, Parcelles Assainies/Guédiawaye/Pikine 2 000 FCFA, Rufisque/Bargny 3 000 FCFA",
+  hours: "Lundi-Samedi 9h-20h30 (non-stop), Dimanche 15h-20h",
+  products: [
+    {
+      name: "Moccasin Cuir Dakar Classic",
+      sizes: ["39", "40", "41", "42", "43", "44"],
+      colorVariants: [
+        { color: "Noir", imageUrl: "https://noxa-whatsapp.vercel.app/images/moccasin-noir.jpg" },
+        { color: "Marron Chocolat", imageUrl: "https://noxa-whatsapp.vercel.app/images/moccasin-marron.jpg" },
+      ],
+      extraColors: ["Tan"],
+      price: "18 000 FCFA",
+    },
+    {
+      name: "Chaussure de ville Ndakarou",
+      sizes: ["40", "41", "42", "43", "44", "45"],
+      colorVariants: [
+        { color: "Noir(Goudi)", imageUrl: "https://noxa-whatsapp.vercel.app/images/ndakarou-noir.jpg" },
+        { color: "Marron(Bant)", imageUrl: "https://noxa-whatsapp.vercel.app/images/ndakarou-marron.jpg" },
+      ],
+      extraColors: ["Vert"],
+      price: "22 000 FCFA",
+    },
+    {
+      name: "Sandale Cuir Samarra",
+      sizes: ["38", "39", "40", "41", "42", "43"],
+      colorVariants: [
+        { color: "Noir", imageUrl: "https://noxa-whatsapp.vercel.app/images/samarra-noir.jpg" },
+        { color: "Marron", imageUrl: "https://noxa-whatsapp.vercel.app/images/samarra-marron.jpg" },
+      ],
+      price: "12 000 FCFA",
+    },
+    {
+      name: "Chaussure Richelieu Luxe Officer",
+      sizes: ["39", "40", "41", "42", "43", "44"],
+      colorVariants: [
+        { color: "Noir Verni", imageUrl: "https://noxa-whatsapp.vercel.app/images/luxe-officer-noir.jpg" },
+        { color: "Marron Sombre", imageUrl: "https://noxa-whatsapp.vercel.app/images/luxe-officer-marron.jpg" },
+      ],
+      price: "28 000 FCFA",
+    },
+    {
+      name: "Air Force One",
+      sizes: ["40", "41", "42", "43", "44", "45"],
+      colorVariants: [
+        { color: "Blanc/Bleu", imageUrl: "https://noxa-whatsapp.vercel.app/images/airforce-bleu.jpg" },
+        { color: "Rouge/Noir", imageUrl: "https://noxa-whatsapp.vercel.app/images/airforce-rouge.jpg" },
+      ],
+      extraColors: ["Blanc Pure", "Noir"],
+      price: "10 000 FCFA",
+    },
+    {
+      name: "Samba",
+      sizes: ["38", "39", "40", "41", "42", "43", "44"],
+      colorVariants: [
+        { color: "Blanc/Gris", imageUrl: "https://noxa-whatsapp.vercel.app/images/samba-gris.jpg" },
+        { color: "Blanc/Bleu", imageUrl: "https://noxa-whatsapp.vercel.app/images/samba-bleu.jpg" },
+      ],
+      extraColors: ["Vert"],
+      price: "12 000 FCFA",
+    },
+    {
+      name: "Chaussure de sport Taggat Yaram",
+      sizes: ["40", "41", "42", "43", "44", "45"],
+      colorVariants: [
+        { color: "Bleu(Modou LO)", imageUrl: "https://noxa-whatsapp.vercel.app/images/taggat-bleu.jpg" },
+        { color: "Rouge/Noir(Balla GAYE 2)", imageUrl: "https://noxa-whatsapp.vercel.app/images/taggat-rouge.jpg" },
+      ],
+      extraColors: ["Noir"],
+      price: "20 000 FCFA",
+    },
+  ],
+},
   "1321520757705474": {
     name: "Boutique test (numéro Sénégal)",
     ownerWhatsApp: "221781178874", // à remplacer par le vrai numéro du commerçant
