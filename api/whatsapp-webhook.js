@@ -187,6 +187,7 @@ Object.values(MERCHANTS).forEach(m => {
 });
 
 const conversationHistory = {};
+const lastColorPerConversation = {}; // ← à ajouter
 
 async function sendWhatsAppText(phoneNumberId, to, body) {
   await fetch(
@@ -379,13 +380,27 @@ export default async function handler(req, res) {
             });
             if (clientColor) {
               instruction = `couleur=${clientColor.color}`;
-              lastColorPerConversation[conversationKey] = clientColor.color; // on mémorise
+              lastColorPerConversation[conversationKey] = clientColor.color;
             } else if (lastColorPerConversation[conversationKey]) {
-              // Aucune couleur dans ce message, mais une était déjà choisie avant
               instruction = `couleur=${lastColorPerConversation[conversationKey]}`;
             }
           } else if (instruction.startsWith('couleur=')) {
             lastColorPerConversation[conversationKey] = instruction.replace('couleur=', '').trim();
+          }
+
+          // ↓↓↓ C'est cette partie qui manquait entièrement ↓↓↓
+          if (instruction === 'toutes') {
+            for (const variant of mentionedProduct.colorVariants) {
+              await sendWhatsAppImage(phoneNumberId, from, variant.imageUrl, `${mentionedProduct.name} (${variant.color}) — ${mentionedProduct.price}`);
+            }
+          } else if (instruction && instruction.startsWith('couleur=')) {
+            const colorName = instruction.replace('couleur=', '').trim();
+            const matchedColor = mentionedProduct.colorVariants.find(c =>
+              c.color.toLowerCase() === colorName.toLowerCase()
+            );
+            if (matchedColor) {
+              await sendWhatsAppImage(phoneNumberId, from, matchedColor.imageUrl, `${mentionedProduct.name} (${matchedColor.color}) — ${mentionedProduct.price}`);
+            }
           }
 
         } else {
