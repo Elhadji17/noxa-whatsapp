@@ -192,7 +192,9 @@ export default async function handler(req, res) {
       const orderMatch = replyText.match(/\[COMMANDE:\s*(.+?)\]/);
 
       const finalClientText = replyText.replace(/\[PHOTO:.+?\]/, '').replace(/\[COMMANDE:.+?\]/, '').trim();
-      await sendWhatsAppText(phoneNumberId, from, finalClientText);
+      if (finalClientText) {
+        await sendWhatsAppText(phoneNumberId, from, finalClientText);
+      }
 
       // Recherche du produit : texte actuel + réponse + historique + mémoire
       const searchText = [text, finalClientText, ...recentHistory.map(m => m.content)].join(' ').toLowerCase();
@@ -229,7 +231,12 @@ export default async function handler(req, res) {
             }
           } else if (instruction && instruction.startsWith('couleur=')) {
             const colorName = instruction.replace('couleur=', '').trim();
-            const matchedColor = mentionedProduct.colorVariants.find(c => c.color.toLowerCase() === colorName.toLowerCase());
+            const matchedColor = mentionedProduct.colorVariants.find(c => {
+              const catalogColor = c.color.toLowerCase();
+              const baseCatalogColor = catalogColor.split('(')[0].trim();
+              const requested = colorName.toLowerCase();
+              return catalogColor === requested || baseCatalogColor === requested;
+            });
             if (matchedColor) {
               await sendWhatsAppImage(phoneNumberId, from, matchedColor.imageUrl, `${mentionedProduct.name} (${matchedColor.color}) — ${mentionedProduct.price}`);
             }
