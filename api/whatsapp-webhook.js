@@ -202,7 +202,7 @@ async function sendWhatsAppText(phoneNumberId, to, body) {
 }
 
 async function sendWhatsAppImage(phoneNumberId, to, imageUrl, caption) {
-  await fetch(
+  const response = await fetch(
     `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`,
     {
       method: 'POST',
@@ -218,6 +218,8 @@ async function sendWhatsAppImage(phoneNumberId, to, imageUrl, caption) {
       }),
     }
   );
+  const data = await response.json();
+  console.log('DEBUG - Résultat envoi image:', imageUrl, JSON.stringify(data));
 }
 
 async function transcribeWhatsAppAudio(mediaId) {
