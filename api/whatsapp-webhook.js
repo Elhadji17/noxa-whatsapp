@@ -4,7 +4,7 @@ function buildProductListText(products) {
   return products.map(p => {
     const sizes = p.sizes ? ` — Tailles ${p.sizes.join('/')}` : '';
     let colorNames = [];
-    if (p.colorVariants) colorNames = colorNames.concat(p.colorVariants.map(c => c.color));
+    if (p.colorVariants) colorNames = colorNames.concat(p.colorVariants.map(c => c.label || c.color));
     if (p.extraColors) colorNames = colorNames.concat(p.extraColors);
     if (!p.colorVariants && p.colors) colorNames = p.colors;
     const colors = colorNames.length ? ` — Couleurs: ${colorNames.join(', ')}` : '';
@@ -64,13 +64,74 @@ const MERCHANTS = {
     delivery: "Dakar Centre/Plateau/Médina 1 500 FCFA, Sacré-Cœur/Mermoz/Ouakam/Yoff/Maristes 1 500 FCFA, Parcelles Assainies/Guédiawaye/Pikine 2 000 FCFA, Rufisque/Bargny 3 000 FCFA",
     hours: "Lundi-Samedi 9h-20h30 (non-stop), Dimanche 15h-20h",
     products: [
-      { name: "Moccasin Cuir Dakar Classic", sizes: ["39","40","41","42","43","44"], colorVariants: [{ color: "Noir", imageUrl: "https://noxa-whatsapp.vercel.app/images/moccasin-noir.jpg" },{ color: "Marron Chocolat", imageUrl: "https://noxa-whatsapp.vercel.app/images/moccasin-marron.jpg" }], extraColors: ["Tan"], price: "18 000 FCFA" },
-      { name: "Chaussure de ville Ndakarou", sizes: ["40","41","42","43","44","45"], colorVariants: [{ color: "Noir(Goudi)", imageUrl: "https://noxa-whatsapp.vercel.app/images/ndakarou-noir.jpg" },{ color: "Marron(Bant)", imageUrl: "https://noxa-whatsapp.vercel.app/images/ndakarou-marron.jpg" }], extraColors: ["Vert"], price: "22 000 FCFA" },
-      { name: "Sandale Cuir Samarra", sizes: ["38","39","40","41","42","43"], colorVariants: [{ color: "Noir", imageUrl: "https://noxa-whatsapp.vercel.app/images/samarra-noir.jpg" },{ color: "Marron", imageUrl: "https://noxa-whatsapp.vercel.app/images/samarra-marron.jpg" }], price: "12 000 FCFA" },
-      { name: "Chaussure Richelieu Luxe Officer", sizes: ["39","40","41","42","43","44"], colorVariants: [{ color: "Noir Verni", imageUrl: "https://noxa-whatsapp.vercel.app/images/luxe-officer-noir.jpg" },{ color: "Marron Sombre", imageUrl: "https://noxa-whatsapp.vercel.app/images/luxe-officer-marron.jpg" }], price: "28 000 FCFA" },
-      { name: "Air Force One", sizes: ["40","41","42","43","44","45"], colorVariants: [{ color: "Blanc/Bleu", imageUrl: "https://noxa-whatsapp.vercel.app/images/airforce-bleu.jpg" },{ color: "Rouge/Noir", imageUrl: "https://noxa-whatsapp.vercel.app/images/airforce-rouge.jpg" }], extraColors: ["Blanc Pure", "Noir"], price: "10 000 FCFA" },
-      { name: "Samba", sizes: ["38","39","40","41","42","43","44"], colorVariants: [{ color: "Blanc/Gris", imageUrl: "https://noxa-whatsapp.vercel.app/images/samba-gris.jpg" },{ color: "Blanc/Bleu", imageUrl: "https://noxa-whatsapp.vercel.app/images/samba-bleu.jpg" }], extraColors: ["Vert"], price: "12 000 FCFA" },
-      { name: "Chaussure de sport Taggat Yaram", sizes: ["40","41","42","43","44","45"], colorVariants: [{ color: "Bleu(Modou LO)", imageUrl: "https://noxa-whatsapp.vercel.app/images/taggat-bleu.jpg" },{ color: "Rouge/Noir(Balla GAYE 2)", imageUrl: "https://noxa-whatsapp.vercel.app/images/taggat-rouge.jpg" }], extraColors: ["Noir"], price: "20 000 FCFA" },
+      {
+        name: "Moccasin Cuir Dakar Classic",
+        sizes: ["39", "40", "41", "42", "43", "44"],
+        colorVariants: [
+          { color: "Noir", imageUrl: "https://noxa-whatsapp.vercel.app/images/moccasin-noir.jpg" },
+          { color: "Marron Chocolat", imageUrl: "https://noxa-whatsapp.vercel.app/images/moccasin-marron.jpg" },
+        ],
+        extraColors: ["Tan"],
+        price: "18 000 FCFA",
+      },
+      {
+        name: "Chaussure de ville Ndakarou",
+        sizes: ["40", "41", "42", "43", "44", "45"],
+        colorVariants: [
+          { color: "Noir", label: "Noir (Goudi)", imageUrl: "https://noxa-whatsapp.vercel.app/images/ndakarou-noir.jpg" },
+          { color: "Marron", label: "Marron (Bant)", imageUrl: "https://noxa-whatsapp.vercel.app/images/ndakarou-marron.jpg" },
+        ],
+        extraColors: ["Vert"],
+        price: "22 000 FCFA",
+      },
+      {
+        name: "Sandale Cuir Samarra",
+        sizes: ["38", "39", "40", "41", "42", "43"],
+        colorVariants: [
+          { color: "Noir", imageUrl: "https://noxa-whatsapp.vercel.app/images/samarra-noir.jpg" },
+          { color: "Marron", imageUrl: "https://noxa-whatsapp.vercel.app/images/samarra-marron.jpg" },
+        ],
+        price: "12 000 FCFA",
+      },
+      {
+        name: "Chaussure Richelieu Luxe Officer",
+        sizes: ["39", "40", "41", "42", "43", "44"],
+        colorVariants: [
+          { color: "Noir Verni", imageUrl: "https://noxa-whatsapp.vercel.app/images/luxe-officer-noir.jpg" },
+          { color: "Marron Sombre", imageUrl: "https://noxa-whatsapp.vercel.app/images/luxe-officer-marron.jpg" },
+        ],
+        price: "28 000 FCFA",
+      },
+      {
+        name: "Air Force One",
+        sizes: ["40", "41", "42", "43", "44", "45"],
+        colorVariants: [
+          { color: "Blanc/Bleu", imageUrl: "https://noxa-whatsapp.vercel.app/images/airforce-bleu.jpg" },
+          { color: "Rouge/Noir", imageUrl: "https://noxa-whatsapp.vercel.app/images/airforce-rouge.jpg" },
+        ],
+        extraColors: ["Blanc Pure", "Noir"],
+        price: "10 000 FCFA",
+      },
+      {
+        name: "Samba",
+        sizes: ["38", "39", "40", "41", "42", "43", "44"],
+        colorVariants: [
+          { color: "Blanc/Gris", imageUrl: "https://noxa-whatsapp.vercel.app/images/samba-gris.jpg" },
+          { color: "Blanc/Bleu", imageUrl: "https://noxa-whatsapp.vercel.app/images/samba-bleu.jpg" },
+        ],
+        extraColors: ["Vert"],
+        price: "12 000 FCFA",
+      },
+      {
+        name: "Chaussure de sport Taggat Yaram",
+        sizes: ["40", "41", "42", "43", "44", "45"],
+        colorVariants: [
+          { color: "Bleu", label: "Bleu (Modou LO)", imageUrl: "https://noxa-whatsapp.vercel.app/images/taggat-bleu.jpg" },
+          { color: "Rouge/Noir", label: "Rouge/Noir (Balla GAYE 2)", imageUrl: "https://noxa-whatsapp.vercel.app/images/taggat-rouge.jpg" },
+        ],
+        extraColors: ["Noir"],
+        price: "20 000 FCFA",
+      },
     ],
   },
   "1321520757705474": {
@@ -213,7 +274,8 @@ export default async function handler(req, res) {
             const clientTextLower = text.toLowerCase();
             const clientColor = mentionedProduct.colorVariants.find(c => {
               const colorLower = c.color.toLowerCase();
-              return clientTextLower.includes(colorLower) || colorLower.includes(clientTextLower);
+              const labelLower = (c.label || c.color).toLowerCase();
+              return clientTextLower.includes(colorLower) || clientTextLower.includes(labelLower);
             });
             if (clientColor) {
               instruction = `couleur=${clientColor.color}`;
@@ -227,18 +289,15 @@ export default async function handler(req, res) {
 
           if (instruction === 'toutes') {
             for (const variant of mentionedProduct.colorVariants) {
-              await sendWhatsAppImage(phoneNumberId, from, variant.imageUrl, `${mentionedProduct.name} (${variant.color}) — ${mentionedProduct.price}`);
+              await sendWhatsAppImage(phoneNumberId, from, matchedColor.imageUrl, `${mentionedProduct.name} (${matchedColor.label || matchedColor.color}) — ${mentionedProduct.price}`);
             }
           } else if (instruction && instruction.startsWith('couleur=')) {
             const colorName = instruction.replace('couleur=', '').trim();
-            const matchedColor = mentionedProduct.colorVariants.find(c => {
-              const catalogColor = c.color.toLowerCase();
-              const baseCatalogColor = catalogColor.split('(')[0].trim();
-              const requested = colorName.toLowerCase();
-              return catalogColor === requested || baseCatalogColor === requested;
-            });
+            const matchedColor = mentionedProduct.colorVariants.find(c =>
+              c.color.toLowerCase() === colorName.toLowerCase()
+            );
             if (matchedColor) {
-              await sendWhatsAppImage(phoneNumberId, from, matchedColor.imageUrl, `${mentionedProduct.name} (${matchedColor.color}) — ${mentionedProduct.price}`);
+              await sendWhatsAppImage(phoneNumberId, from, matchedColor.imageUrl, `${mentionedProduct.name} (${matchedColor.label || matchedColor.color}) — ${mentionedProduct.price}`);
             }
           }
         } else {
