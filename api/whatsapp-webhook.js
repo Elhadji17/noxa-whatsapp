@@ -364,25 +364,33 @@ export default async function handler(req, res) {
 
       if (mentionedProduct) {
         if (mentionedProduct.colorVariants) {
-          // Produit à plusieurs couleurs : on attend le marqueur de l'IA
-          if (photoMatch) {
-            const instruction = photoMatch[1].trim();
-            if (instruction === 'toutes') {
-              for (const variant of mentionedProduct.colorVariants) {
-                await sendWhatsAppImage(phoneNumberId, from, variant.imageUrl, `${mentionedProduct.name} (${variant.color}) — ${mentionedProduct.price}`);
-              }
-            } else if (instruction.startsWith('couleur=')) {
-              const colorName = instruction.replace('couleur=', '').trim();
-              const matchedColor = mentionedProduct.colorVariants.find(c =>
-                c.color.toLowerCase() === colorName.toLowerCase()
-              );
-              if (matchedColor) {
-                await sendWhatsAppImage(phoneNumberId, from, matchedColor.imageUrl, `${mentionedProduct.name} (${matchedColor.color}) — ${mentionedProduct.price}`);
-              }
+          let instruction = photoMatch ? photoMatch[1].trim() : null;
+
+          // Filet de sécurité : si l'IA n'a pas mis de marqueur, on vérifie
+          // nous-mêmes si le CLIENT a mentionné une couleur précise
+          if (!instruction) {
+            const clientColor = mentionedProduct.colorVariants.find(c =>
+              text.toLowerCase().includes(c.color.toLowerCase())
+            );
+            if (clientColor) {
+              instruction = `couleur=${clientColor.color}`;
+            }
+          }
+
+          if (instruction === 'toutes') {
+            for (const variant of mentionedProduct.colorVariants) {
+              await sendWhatsAppImage(phoneNumberId, from, variant.imageUrl, `${mentionedProduct.name} (${variant.color}) — ${mentionedProduct.price}`);
+            }
+          } else if (instruction && instruction.startsWith('couleur=')) {
+            const colorName = instruction.replace('couleur=', '').trim();
+            const matchedColor = mentionedProduct.colorVariants.find(c =>
+              c.color.toLowerCase() === colorName.toLowerCase()
+            );
+            if (matchedColor) {
+              await sendWhatsAppImage(phoneNumberId, from, matchedColor.imageUrl, `${mentionedProduct.name} (${matchedColor.color}) — ${mentionedProduct.price}`);
             }
           }
         } else {
-          // Produit à une seule couleur : toujours envoyer dès que mentionné, sans condition
           await sendWhatsAppImage(phoneNumberId, from, mentionedProduct.imageUrl, `${mentionedProduct.name} — ${mentionedProduct.price}`);
         }
       }
