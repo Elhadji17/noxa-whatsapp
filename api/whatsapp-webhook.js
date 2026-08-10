@@ -357,7 +357,7 @@ export default async function handler(req, res) {
 
       // Gestion de l'envoi de photo
       const mentionedProduct = merchant.products.find(p =>
-        finalClientText.toLowerCase().includes(p.name.toLowerCase().split(' ')[0])
+        finalClientText.toLowerCase().includes(p.name.toLowerCase())
       );
 
       if (mentionedProduct) {
