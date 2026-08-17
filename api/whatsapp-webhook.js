@@ -282,6 +282,8 @@ export default async function handler(req, res) {
       }
 
       const replyText = aiData.choices?.[0]?.message?.content || "Désolé, je n'ai pas pu traiter votre message.";
+      console.log('DEBUG - replyText complet:', replyText);
+      console.log('DEBUG - orderMatch trouvé:', replyText.match(/\[COMMANDE:\s*(.+?)\]/) ? 'OUI' : 'NON');
       conversationHistory[conversationKey].push({ role: 'assistant', content: replyText });
 
       const photoMatch = replyText.match(/\[PHOTO:\s*(.+?)\]/);
