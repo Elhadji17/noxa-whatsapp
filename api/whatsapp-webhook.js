@@ -365,14 +365,8 @@ export default async function handler(req, res) {
       if (orderMatch && merchant.ownerWhatsApp) {
         if (wasVoiceMessage) {
           console.log('DEBUG - [COMMANDE] détecté sur un message vocal non confirmé par écrit : notification bloquée par sécurité.');
-          // On corrige le message trompeur envoyé au client
-          await sendWhatsAppText(
-            phoneNumberId,
-            from,
-            "Pour valider définitivement votre commande, pouvez-vous me le confirmer par écrit (juste \"oui\" ou \"confirmé\" suffit) ? C'est important pour être sûr qu'aucune information ne se perde. 🙏"
-          );
         } else {
-          await fetch(`https://graph.facebook.com/v21.0/${phoneNumberId}/messages`, {
+          const notifResponse = await fetch(`https://graph.facebook.com/v21.0/${phoneNumberId}/messages`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}` },
             body: JSON.stringify({
@@ -381,6 +375,8 @@ export default async function handler(req, res) {
               text: { body: `🛍️ Nouvelle commande !\n${orderMatch[1]}\nClient: ${from}\n\nVérifiez votre app Wave pour confirmer la réception du paiement avant de valider.` },
             }),
           });
+          const notifData = await notifResponse.json();
+          console.log('DEBUG - Résultat notification commerçant:', JSON.stringify(notifData));
         }
       }
 
