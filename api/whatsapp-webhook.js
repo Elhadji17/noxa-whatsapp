@@ -354,6 +354,12 @@ export default async function handler(req, res) {
       if (orderMatch && merchant.ownerWhatsApp) {
         if (wasVoiceMessage) {
           console.log('DEBUG - [COMMANDE] détecté sur un message vocal non confirmé par écrit : notification bloquée par sécurité.');
+          // On corrige le message trompeur envoyé au client
+          await sendWhatsAppText(
+            phoneNumberId,
+            from,
+            "Pour valider définitivement votre commande, pouvez-vous me le confirmer par écrit (juste \"oui\" ou \"confirmé\" suffit) ? C'est important pour être sûr qu'aucune information ne se perde. 🙏"
+          );
         } else {
           await fetch(`https://graph.facebook.com/v21.0/${phoneNumberId}/messages`, {
             method: 'POST',
