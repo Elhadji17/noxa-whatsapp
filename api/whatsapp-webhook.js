@@ -295,7 +295,8 @@ export default async function handler(req, res) {
       }
 
       // Recherche du produit : texte actuel + réponse + historique + mémoire
-      const searchText = [text, finalClientText, ...recentHistory.map(m => m.content)].join(' ').toLowerCase();
+      // Par celle-ci : uniquement le tour actuel, pas tout l'historique
+      const searchText = [text, finalClientText].join(' ').toLowerCase();
       let mentionedProduct = merchant.products.find(p => searchText.includes(p.name.toLowerCase()));
       if (mentionedProduct) {
         lastProductPerConversation[conversationKey] = mentionedProduct.name;
