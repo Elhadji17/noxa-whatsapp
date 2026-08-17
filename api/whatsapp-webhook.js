@@ -48,8 +48,30 @@ au client :
 - Aucune couleur encore choisie : n'ajoute aucun marqueur
 Ne dis JAMAIS que tu n'as pas de photo disponible.
 
+RÈGLE DE SÉCURITÉ VOCALE (TRÈS IMPORTANT) :
+Certains messages du client sont précédés de "[MESSAGE VOCAL - transcription 
+potentiellement imparfaite]". Cela signifie que la transcription automatique 
+peut être déformée, en particulier les NOMBRES (tailles/pointures), qui sont 
+souvent mal transcrits (ex: un chiffre comme 42, 43 ou 44 peut ressortir 
+comme un mot incohérent).
+
+Si une information critique (taille, produit, ou couleur en cas d'ambiguïté) 
+provient UNIQUEMENT d'un message marqué [MESSAGE VOCAL] et n'a jamais été 
+confirmée clairement ensuite, tu ne dois JAMAIS :
+- l'utiliser pour finaliser une commande (marqueur [COMMANDE:...])
+- l'affirmer avec certitude au client comme si elle était sûre
+
+Dans ce cas, demande TOUJOURS une confirmation explicite avant de continuer, 
+par exemple : "Pour être sûr, vous voulez bien confirmer la pointure : 42, 
+43 ou 44 ?" N'ajoute le marqueur [COMMANDE:...] que lorsque le produit, la 
+taille et la couleur (si applicable) ont été confirmés sans ambiguïté, que 
+ce soit par écrit ou par une réponse vocale limpide et non ambiguë (par 
+exemple si le client répète clairement un seul chiffre en réponse à ta 
+question de clarification).
+
 GESTION DE LA CONFIRMATION DE COMMANDE :
-Quand une commande est confirmée, termine par :
+Quand une commande est confirmée (et seulement après avoir respecté la 
+RÈGLE DE SÉCURITÉ VOCALE ci-dessus si applicable), termine par :
 [COMMANDE: produit=NOM; zone=ZONE; total=MONTANT]
 Une seule fois par commande.
 
@@ -215,12 +237,17 @@ export default async function handler(req, res) {
       }
 
       let text = message.text?.body;
+      let wasVoiceMessage = false;
+
       if (message.type === 'audio' && message.audio?.id) {
         text = await transcribeWhatsAppAudio(message.audio.id);
         if (!text) {
           await sendWhatsAppText(phoneNumberId, from, "Je n'ai pas bien compris votre message vocal, pouvez-vous réessayer ou l'écrire en texte ?");
           return res.status(200).send('OK');
         }
+        wasVoiceMessage = true;
+        // Marque ce message comme vocal pour que GPT applique la règle de sécurité
+        text = `[MESSAGE VOCAL - transcription potentiellement imparfaite] ${text}`;
       }
       if (!text) return res.status(200).send('OK');
 
@@ -288,8 +315,15 @@ export default async function handler(req, res) {
           }
 
           if (instruction === 'toutes') {
+            // Bug corrigé : on envoie bien chaque `variant`, pas une variable
+            // `matchedColor` qui n'existe pas dans cette branche.
             for (const variant of mentionedProduct.colorVariants) {
-              await sendWhatsAppImage(phoneNumberId, from, matchedColor.imageUrl, `${mentionedProduct.name} (${matchedColor.label || matchedColor.color}) — ${mentionedProduct.price}`);
+              await sendWhatsAppImage(
+                phoneNumberId,
+                from,
+                variant.imageUrl,
+                `${mentionedProduct.name} (${variant.label || variant.color}) — ${mentionedProduct.price}`
+              );
             }
           } else if (instruction && instruction.startsWith('couleur=')) {
             const colorName = instruction.replace('couleur=', '').trim();
@@ -297,7 +331,12 @@ export default async function handler(req, res) {
               c.color.toLowerCase() === colorName.toLowerCase()
             );
             if (matchedColor) {
-              await sendWhatsAppImage(phoneNumberId, from, matchedColor.imageUrl, `${mentionedProduct.name} (${matchedColor.label || matchedColor.color}) — ${mentionedProduct.price}`);
+              await sendWhatsAppImage(
+                phoneNumberId,
+                from,
+                matchedColor.imageUrl,
+                `${mentionedProduct.name} (${matchedColor.label || matchedColor.color}) — ${mentionedProduct.price}`
+              );
             }
           }
         } else {
@@ -305,16 +344,27 @@ export default async function handler(req, res) {
         }
       }
 
+      // Notification de commande, avec garde-fou de sécurité vocale.
+      // Filet de sécurité côté code, en plus de l'instruction donnée à GPT :
+      // si le message qui a déclenché ce [COMMANDE:...] est lui-même un vocal
+      // non encore reconfirmé par écrit, on ne notifie pas le commerçant —
+      // GPT est censé avoir redemandé confirmation plutôt que d'émettre ce
+      // marqueur, donc ce cas ne devrait plus se présenter, mais on ne
+      // dépend pas uniquement du bon respect du prompt.
       if (orderMatch && merchant.ownerWhatsApp) {
-        await fetch(`https://graph.facebook.com/v21.0/${phoneNumberId}/messages`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}` },
-          body: JSON.stringify({
-            messaging_product: 'whatsapp',
-            to: merchant.ownerWhatsApp,
-            text: { body: `🛍️ Nouvelle commande !\n${orderMatch[1]}\nClient: ${from}\n\nVérifiez votre app Wave pour confirmer la réception du paiement avant de valider.` },
-          }),
-        });
+        if (wasVoiceMessage) {
+          console.log('DEBUG - [COMMANDE] détecté sur un message vocal non confirmé par écrit : notification bloquée par sécurité.');
+        } else {
+          await fetch(`https://graph.facebook.com/v21.0/${phoneNumberId}/messages`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}` },
+            body: JSON.stringify({
+              messaging_product: 'whatsapp',
+              to: merchant.ownerWhatsApp,
+              text: { body: `🛍️ Nouvelle commande !\n${orderMatch[1]}\nClient: ${from}\n\nVérifiez votre app Wave pour confirmer la réception du paiement avant de valider.` },
+            }),
+          });
+        }
       }
 
       return res.status(200).send('OK');
