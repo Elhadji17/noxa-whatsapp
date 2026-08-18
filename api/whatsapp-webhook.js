@@ -333,6 +333,17 @@ function setStateField(state, field, value, isVoice) {
   }
 }
 
+// Construit le texte de tous les messages du CLIENT uniquement (pas l'assistant),
+// du plus récent au plus ancien, pour chercher une couleur/taille/zone même si
+// elle n'a pas été répétée au tour actuel
+function getClientMessagesText(recentHistory, currentText) {
+  const clientMessages = recentHistory
+    .filter(m => m.role === 'user')
+    .map(m => m.content)
+    .reverse(); // du plus récent au plus ancien
+  return [currentText, ...clientMessages].join(' | ').toLowerCase();
+}
+
 async function sendWhatsAppText(phoneNumberId, to, body) {
   await fetch(`https://graph.facebook.com/v21.0/${phoneNumberId}/messages`, {
     method: 'POST',
@@ -535,16 +546,26 @@ export default async function handler(req, res) {
         mentionedProduct = merchant.products.find(p => p.name === state.product.value);
       }
 
-      // PARTIE 1 : détection d'état — toujours exécutée, indépendamment de l'envoi de photo
+      const clientHistoryLower = getClientMessagesText(recentHistory, text);
+
+      // Pour la taille
       if (mentionedProduct && mentionedProduct.sizes) {
         const sizeMatch = mentionedProduct.sizes.find(s => {
           const regex = new RegExp(`\\b${s}\\b`);
-          return regex.test(text);
+          return regex.test(clientHistoryLower);
         });
         if (sizeMatch) {
           setStateField(state, 'size', sizeMatch, wasVoiceMessage);
         }
       }
+
+      // Pour la couleur
+      const found = allColors.find(c =>
+        clientHistoryLower.includes(c.value.toLowerCase()) || clientHistoryLower.includes(c.label.toLowerCase())
+      );
+
+      // Pour la zone
+      const match = dz.zones.find(z => clientHistoryLower.includes(z.toLowerCase()));
 
       let detectedColor = null;
       if (mentionedProduct) {
