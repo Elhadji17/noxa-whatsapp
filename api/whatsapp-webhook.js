@@ -77,6 +77,20 @@ impérativement ajouter le marqueur [COMMANDE: produit=NOM; zone=ZONE;
 total=MONTANT] dans TA RÉPONSE À CE MESSAGE DE CONFIRMATION — c'est le 
 moment précis où la commande doit être transmise au commerçant, pas avant.
 
+RÈGLE DE FIABILITÉ DU MARQUEUR COMMANDE :
+Quand tu génères le marqueur [COMMANDE: produit=...; zone=...; total=...], 
+la valeur de "zone" DOIT être exactement identique à la zone de livraison 
+que tu viens d'utiliser dans ta phrase pour calculer le prix de livraison 
+et le total. Ne reformule jamais ni ne change cette zone entre le moment où 
+tu l'annonces au client et le moment où tu la mets dans le marqueur — 
+recopie-la mot pour mot.
+
+Après une commande confirmée, si le client répond par un message court sans 
+nouvelle demande (ex: "Ok", "Merci", "👍"), ne recommence PAS une salutation 
+générique comme si la conversation était nouvelle — réponds simplement de 
+façon chaleureuse et brève, par exemple "Avec plaisir ! N'hésitez pas si vous 
+avez besoin d'autre chose. 🙏"
+
 GESTION DE LA CONFIRMATION DE COMMANDE :
 Quand une commande est confirmée (et seulement après avoir respecté la 
 RÈGLE DE SÉCURITÉ VOCALE ci-dessus si applicable), termine par :
@@ -220,6 +234,82 @@ async function transcribeWhatsAppAudio(mediaId) {
   return transcriptionData.text || null;
 }
 
+// Espace les nombres (téléphone, prix) pour que le TTS les lise chiffre par
+// chiffre / en petits groupes, plutôt que comme un seul très grand nombre.
+function formatNumbersForSpeech(text) {
+  return text.replace(/\b\d{5,}\b/g, (match) => {
+    // Découpe en groupes de 2-3 chiffres, garde les 3 premiers comme indicatif
+    if (match.length >= 9) {
+      const country = match.slice(0, 3);
+      const rest = match.slice(3);
+      const groups = rest.match(/.{1,2}/g) || [];
+      return `${country} ${groups.join(' ')}`;
+    }
+    // Pour les prix/totaux plus courts, simple espacement par milliers
+    return match.replace(/(\d)(?=(\d{3})+(?!\d))/g, '$1 ');
+  });
+}
+
+async function generateAndSendVoiceReply(phoneNumberId, to, text) {
+  try {
+    const speechText = formatNumbersForSpeech(text);
+
+    // 1. Génère l'audio avec OpenAI TTS
+    const ttsResponse = await fetch('https://api.openai.com/v1/audio/speech', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: 'tts-1',
+        voice: 'nova',
+        input: speechText,
+      }),
+    });
+    const audioBuffer = await ttsResponse.arrayBuffer();
+
+    // 2. Upload l'audio vers l'API Media de WhatsApp
+    const formData = new FormData();
+    formData.append('file', new Blob([audioBuffer], { type: 'audio/mpeg' }), 'reply.mp3');
+    formData.append('messaging_product', 'whatsapp');
+
+    const uploadResponse = await fetch(
+      `https://graph.facebook.com/v21.0/${phoneNumberId}/media`,
+      {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}` },
+        body: formData,
+      }
+    );
+    const uploadData = await uploadResponse.json();
+    const mediaId = uploadData.id;
+
+    if (!mediaId) {
+      console.error('DEBUG - Échec upload média TTS:', JSON.stringify(uploadData));
+      return;
+    }
+
+    // 3. Envoie le message vocal en référençant ce media_id
+    await fetch(`https://graph.facebook.com/v21.0/${phoneNumberId}/messages`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`,
+      },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        to,
+        type: 'audio',
+        audio: { id: mediaId },
+      }),
+    });
+  } catch (err) {
+    console.error('Erreur génération/envoi TTS:', err);
+    // Pas grave si ça échoue : le texte est déjà parti, le client a sa réponse
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method === 'GET') {
     const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN;
@@ -282,8 +372,6 @@ export default async function handler(req, res) {
       }
 
       const replyText = aiData.choices?.[0]?.message?.content || "Désolé, je n'ai pas pu traiter votre message.";
-      console.log('DEBUG - replyText complet:', replyText);
-      console.log('DEBUG - orderMatch trouvé:', replyText.match(/\[COMMANDE:\s*(.+?)\]/) ? 'OUI' : 'NON');
       conversationHistory[conversationKey].push({ role: 'assistant', content: replyText });
 
       const photoMatch = replyText.match(/\[PHOTO:\s*(.+?)\]/);
@@ -292,10 +380,17 @@ export default async function handler(req, res) {
       const finalClientText = replyText.replace(/\[PHOTO:.+?\]/, '').replace(/\[COMMANDE:.+?\]/, '').trim();
       if (finalClientText) {
         await sendWhatsAppText(phoneNumberId, from, finalClientText);
+
+        // Si le client a écrit en vocal, on répond aussi en vocal (en plus du texte)
+        if (wasVoiceMessage) {
+          await generateAndSendVoiceReply(phoneNumberId, from, finalClientText);
+        }
       }
 
-      // Recherche du produit : texte actuel + réponse + historique + mémoire
-      // Par celle-ci : uniquement le tour actuel, pas tout l'historique
+      // Recherche du produit : uniquement le tour actuel (pas tout l'historique),
+      // avec la mémoire lastProductPerConversation comme filet de sécurité pour
+      // les références implicites ("celui-là") — évite de renvoyer la photo à
+      // chaque tour suivant sans raison.
       const searchText = [text, finalClientText].join(' ').toLowerCase();
       let mentionedProduct = merchant.products.find(p => searchText.includes(p.name.toLowerCase()));
       if (mentionedProduct) {
@@ -326,8 +421,6 @@ export default async function handler(req, res) {
           }
 
           if (instruction === 'toutes') {
-            // Bug corrigé : on envoie bien chaque `variant`, pas une variable
-            // `matchedColor` qui n'existe pas dans cette branche.
             for (const variant of mentionedProduct.colorVariants) {
               await sendWhatsAppImage(
                 phoneNumberId,
@@ -356,12 +449,6 @@ export default async function handler(req, res) {
       }
 
       // Notification de commande, avec garde-fou de sécurité vocale.
-      // Filet de sécurité côté code, en plus de l'instruction donnée à GPT :
-      // si le message qui a déclenché ce [COMMANDE:...] est lui-même un vocal
-      // non encore reconfirmé par écrit, on ne notifie pas le commerçant —
-      // GPT est censé avoir redemandé confirmation plutôt que d'émettre ce
-      // marqueur, donc ce cas ne devrait plus se présenter, mais on ne
-      // dépend pas uniquement du bon respect du prompt.
       if (orderMatch && merchant.ownerWhatsApp) {
         if (wasVoiceMessage) {
           console.log('DEBUG - [COMMANDE] détecté sur un message vocal non confirmé par écrit : notification bloquée par sécurité.');
