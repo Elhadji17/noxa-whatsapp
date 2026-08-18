@@ -12,8 +12,11 @@ function buildProductListText(products) {
   }).join('\n');
 }
 
+function buildDeliveryText(deliveryZones) {
+  return deliveryZones.map(dz => `${dz.zones.join('/')} : ${dz.price} FCFA`).join(', ');
+}
 function buildSystemPrompt(merchantInfo) {
-  return `Tu es l'assistant WhatsApp de ${merchantInfo.name}, boutique de vêtements à Dakar.
+  return `Tu es l'assistant WhatsApp de ${buildDeliveryText(merchantInfo.deliveryZones)}, boutique de vêtements à Dakar.
 
 RÈGLE ABSOLUE : N'utilise QUE les informations du catalogue ci-dessous. Si un produit, une taille, une couleur, un prix ou un service n'y figure pas, réponds : "Je n'ai pas cette info précise, on vérifie et je reviens vers vous vite !" Ne jamais inventer un prix, une taille, une couleur ou une disponibilité.
 
@@ -94,10 +97,95 @@ avez besoin d'autre chose. 🙏"
 GESTION DE LA CONFIRMATION DE COMMANDE :
 Quand une commande est confirmée (et seulement après avoir respecté la 
 RÈGLE DE SÉCURITÉ VOCALE ci-dessus si applicable), termine par :
-[COMMANDE: produit=NOM; zone=ZONE; total=MONTANT]
+[COMMANDE: produit=NOM; taille=TAILLE; couleur=COULEUR; zone=ZONE; total=MONTANT]
+Utilise "aucune" si la taille ou la couleur ne s'applique pas à ce produit.
 Une seule fois par commande.
 
 TON : Chaleureux, direct, mélange naturel français/wolof simple ("Waaw", "am nañu ko", "jërejëf"). Réponses courtes, 2-3 phrases max.`;
+}
+
+function findDeliveryZone(deliveryZones, zoneName) {
+  if (!zoneName) return null;
+  const zoneLower = zoneName.toLowerCase();
+  return deliveryZones.find(dz =>
+    dz.zones.some(z => z.toLowerCase() === zoneLower)
+  );
+}
+
+function parsePrice(priceStr) {
+  // "18 000 FCFA" -> 18000
+  return parseInt(String(priceStr).replace(/[^\d]/g, ''), 10);
+}
+
+function validateOrder(state, merchant) {
+  const errors = [];
+
+  // 1. Produit confirmé et existant
+  if (!state.product.confirmed || !state.product.value) {
+    errors.push('produit non confirmé');
+  }
+  const product = merchant.products.find(p => p.name === state.product.value);
+  if (!product) {
+    errors.push('produit introuvable dans le catalogue');
+  }
+
+  // 2. Taille confirmée et valide pour CE produit
+  if (product && product.sizes) {
+    if (!state.size.confirmed || !state.size.value) {
+      errors.push('taille non confirmée');
+    } else if (!product.sizes.includes(state.size.value)) {
+      errors.push('taille invalide pour ce produit');
+    }
+  }
+
+  // 3. Couleur confirmée et valide pour CE produit (si applicable)
+  const hasColors = product && (product.colorVariants || product.extraColors || product.colors);
+  if (hasColors) {
+    let validColors = [];
+    if (product.colorVariants) validColors = validColors.concat(product.colorVariants.map(c => c.color));
+    if (product.extraColors) validColors = validColors.concat(product.extraColors);
+    if (product.colors) validColors = validColors.concat(product.colors);
+
+    if (!state.color.confirmed || !state.color.value) {
+      errors.push('couleur non confirmée');
+    } else if (!validColors.some(c => c.toLowerCase() === state.color.value.toLowerCase())) {
+      errors.push('couleur invalide pour ce produit');
+    }
+  }
+
+  // 4. Zone confirmée et connue
+  if (!state.deliveryZone.confirmed || !state.deliveryZone.value) {
+    errors.push('zone de livraison non confirmée');
+  }
+  const zoneMatch = findDeliveryZone(merchant.deliveryZones, state.deliveryZone.value);
+  if (state.deliveryZone.value && !zoneMatch) {
+    errors.push('zone de livraison inconnue');
+  }
+
+  // 5. Commande pas déjà envoyée
+  if (state.orderSent) {
+    errors.push('commande déjà transmise');
+  }
+
+  if (errors.length > 0) {
+    return { valid: false, errors };
+  }
+
+  // Calcul du prix, entièrement côté serveur — jamais celui donné par GPT
+  const productPrice = parsePrice(product.price);
+  const deliveryPrice = zoneMatch.price;
+  const total = productPrice + deliveryPrice;
+
+  return {
+    valid: true,
+    orderDetails: {
+      product: product.name,
+      size: state.size.value,
+      color: state.color.value,
+      zone: state.deliveryZone.value,
+      total,
+    },
+  };
 }
 
 const MERCHANTS = {
@@ -105,7 +193,15 @@ const MERCHANTS = {
     name: "AD Shoes",
     ownerWhatsApp: "33664017511",
     wavePaymentNumber: "221781645041",
-    delivery: "Dakar Centre/Plateau/Médina 1 500 FCFA, Sacré-Cœur/Mermoz/Ouakam/Yoff/Maristes 1 500 FCFA, Parcelles Assainies/Guédiawaye/Pikine 2 000 FCFA, Rufisque/Bargny 3 000 FCFA",
+    // Pour AD Shoes, remplace :
+    // delivery: "Dakar Centre/Plateau/Médina 1 500 FCFA, ..."
+    // par :
+    deliveryZones: [
+      { zones: ["Dakar Centre", "Plateau", "Médina"], price: 1500 },
+      { zones: ["Sacré-Cœur", "Mermoz", "Ouakam", "Yoff", "Maristes"], price: 1500 },
+      { zones: ["Parcelles Assainies", "Guédiawaye", "Pikine"], price: 2000 },
+      { zones: ["Rufisque", "Bargny"], price: 3000 },
+    ],
     hours: "Lundi-Samedi 9h-20h30 (non-stop), Dimanche 15h-20h",
     products: [
       {
@@ -197,8 +293,42 @@ const MERCHANTS = {
 Object.values(MERCHANTS).forEach(m => { m.systemPrompt = buildSystemPrompt(m); });
 
 const conversationHistory = {};
-const lastProductPerConversation = {};
-const lastColorPerConversation = {};
+// Remplace les deux anciennes constantes par celle-ci
+const conversationState = {};
+
+function getConversationState(conversationKey) {
+  if (!conversationState[conversationKey]) {
+    conversationState[conversationKey] = {
+      product: { value: null, source: null, confirmed: false },
+      size: { value: null, source: null, confirmed: false },
+      color: { value: null, source: null, confirmed: false },
+      deliveryZone: { value: null, source: null, confirmed: false },
+      orderSent: false,
+    };
+  }
+  return conversationState[conversationKey];
+}
+
+// Met à jour un champ, en respectant une règle simple :
+// - une info venant du texte écrit est directement confirmée
+// - une info venant du vocal reste NON confirmée, sauf si elle confirme
+//   une valeur déjà confirmée précédemment (le client répète la même chose)
+function setStateField(state, field, value, isVoice) {
+  const current = state[field];
+  const source = isVoice ? 'voice' : 'text';
+
+  if (!isVoice) {
+    state[field] = { value, source, confirmed: true };
+    return;
+  }
+
+  // Message vocal : ne confirme que si ça correspond à une valeur déjà confirmée
+  if (current.confirmed && current.value === value) {
+    state[field] = { value, source: 'voice_reconfirmed', confirmed: true };
+  } else {
+    state[field] = { value, source: 'voice', confirmed: false };
+  }
+}
 
 async function sendWhatsAppText(phoneNumberId, to, body) {
   await fetch(`https://graph.facebook.com/v21.0/${phoneNumberId}/messages`, {
@@ -353,6 +483,7 @@ export default async function handler(req, res) {
       if (!merchant) return res.status(200).send('OK');
 
       const conversationKey = `${phoneNumberId}_${from}`;
+      const state = getConversationState(conversationKey);
       if (!conversationHistory[conversationKey]) conversationHistory[conversationKey] = [];
       conversationHistory[conversationKey].push({ role: 'user', content: text });
       const recentHistory = conversationHistory[conversationKey].slice(-10);
@@ -391,12 +522,24 @@ export default async function handler(req, res) {
       // avec la mémoire lastProductPerConversation comme filet de sécurité pour
       // les références implicites ("celui-là") — évite de renvoyer la photo à
       // chaque tour suivant sans raison.
+      // Recherche du produit : remplace l'ancien mentionedProduct/lastProductPerConversation
       const searchText = [text, finalClientText].join(' ').toLowerCase();
       let mentionedProduct = merchant.products.find(p => searchText.includes(p.name.toLowerCase()));
+
       if (mentionedProduct) {
-        lastProductPerConversation[conversationKey] = mentionedProduct.name;
-      } else if (lastProductPerConversation[conversationKey]) {
-        mentionedProduct = merchant.products.find(p => p.name === lastProductPerConversation[conversationKey]);
+        setStateField(state, 'product', mentionedProduct.name, wasVoiceMessage);
+      } else if (state.product.value) {
+        mentionedProduct = merchant.products.find(p => p.name === state.product.value);
+      }
+
+      if (mentionedProduct && mentionedProduct.sizes) {
+        const sizeMatch = mentionedProduct.sizes.find(s => {
+          const regex = new RegExp(`\\b${s}\\b`);
+          return regex.test(text);
+        });
+        if (sizeMatch) {
+          setStateField(state, 'size', sizeMatch, wasVoiceMessage);
+        }
       }
 
       if (mentionedProduct) {
@@ -411,14 +554,27 @@ export default async function handler(req, res) {
               return clientTextLower.includes(colorLower) || clientTextLower.includes(labelLower);
             });
             if (clientColor) {
-              instruction = `couleur=${clientColor.color}`;
-              lastColorPerConversation[conversationKey] = clientColor.color;
-            } else if (lastColorPerConversation[conversationKey]) {
-              instruction = `couleur=${lastColorPerConversation[conversationKey]}`;
+              setStateField(state, 'color', clientColor.color, wasVoiceMessage);
             }
-          } else if (instruction.startsWith('couleur=')) {
-            lastColorPerConversation[conversationKey] = instruction.replace('couleur=', '').trim();
           }
+          if (merchant.deliveryZones) {
+            const zoneMatch = findDeliveryZone(merchant.deliveryZones, text);
+            // findDeliveryZone cherche une correspondance exacte ; pour capter la zone
+            // dans une phrase libre, on cherche plutôt si un nom de zone connu apparaît
+            // dans le texte du client
+            const clientTextLower = text.toLowerCase();
+            let foundZone = null;
+            for (const dz of merchant.deliveryZones) {
+              const match = dz.zones.find(z => clientTextLower.includes(z.toLowerCase()));
+              if (match) {
+                foundZone = match;
+                break;
+              }
+            }
+            if (foundZone) {
+              setStateField(state, 'deliveryZone', foundZone, wasVoiceMessage);
+            }
+          } 
 
           if (instruction === 'toutes') {
             for (const variant of mentionedProduct.colorVariants) {
@@ -453,17 +609,30 @@ export default async function handler(req, res) {
         if (wasVoiceMessage) {
           console.log('DEBUG - [COMMANDE] détecté sur un message vocal non confirmé par écrit : notification bloquée par sécurité.');
         } else {
-          const notifResponse = await fetch(`https://graph.facebook.com/v21.0/${phoneNumberId}/messages`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}` },
-            body: JSON.stringify({
-              messaging_product: 'whatsapp',
-              to: merchant.ownerWhatsApp,
-              text: { body: `🛍️ Nouvelle commande !\n${orderMatch[1]}\nClient: ${from}\n\nVérifiez votre app Wave pour confirmer la réception du paiement avant de valider.` },
-            }),
-          });
-          const notifData = await notifResponse.json();
-          console.log('DEBUG - Résultat notification commerçant:', JSON.stringify(notifData));
+          const validation = validateOrder(state, merchant);
+
+          if (validation.valid) {
+            const d = validation.orderDetails;
+            await fetch(`https://graph.facebook.com/v21.0/${phoneNumberId}/messages`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}` },
+              body: JSON.stringify({
+                messaging_product: 'whatsapp',
+                to: merchant.ownerWhatsApp,
+                text: { body: `🛍️ Nouvelle commande !\nProduit: ${d.product}\nTaille: ${d.size}\nCouleur: ${d.color}\nZone: ${d.zone}\nTotal: ${d.total} FCFA\nClient: ${from}\n\nVérifiez votre app Wave pour confirmer la réception du paiement avant de valider.` },
+              }),
+            });
+            state.orderSent = true;
+          } else {
+            console.log('DEBUG - Commande refusée par validateOrder:', validation.errors.join(', '));
+            // On ne notifie PAS le commerçant, et on informe le client qu'il manque
+            // encore une confirmation, plutôt que de le laisser croire que c'est réglé
+            await sendWhatsAppText(
+              phoneNumberId,
+              from,
+              "Il me manque encore une information pour finaliser votre commande — pouvez-vous confirmer le produit, la taille, la couleur et votre zone de livraison ? 🙏"
+            );
+          }
         }
       }
 
