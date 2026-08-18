@@ -535,6 +535,7 @@ export default async function handler(req, res) {
         mentionedProduct = merchant.products.find(p => p.name === state.product.value);
       }
 
+      // PARTIE 1 : détection d'état — toujours exécutée, indépendamment de l'envoi de photo
       if (mentionedProduct && mentionedProduct.sizes) {
         const sizeMatch = mentionedProduct.sizes.find(s => {
           const regex = new RegExp(`\\b${s}\\b`);
@@ -545,46 +546,59 @@ export default async function handler(req, res) {
         }
       }
 
+      let detectedColor = null;
+      if (mentionedProduct) {
+        let allColors = [];
+        if (mentionedProduct.colorVariants) {
+          allColors = allColors.concat(mentionedProduct.colorVariants.map(c => ({
+            value: c.color, label: c.label || c.color,
+          })));
+        }
+        if (mentionedProduct.extraColors) {
+          allColors = allColors.concat(mentionedProduct.extraColors.map(c => ({ value: c, label: c })));
+        }
+        if (mentionedProduct.colors) {
+          allColors = allColors.concat(mentionedProduct.colors.map(c => ({ value: c, label: c })));
+        }
+
+        const clientTextLower = text.toLowerCase();
+        const found = allColors.find(c =>
+          clientTextLower.includes(c.value.toLowerCase()) || clientTextLower.includes(c.label.toLowerCase())
+        );
+        if (found) {
+          detectedColor = found.value;
+          setStateField(state, 'color', found.value, wasVoiceMessage);
+        }
+      }
+
+      if (merchant.deliveryZones) {
+        const clientTextLower = text.toLowerCase();
+        let foundZone = null;
+        for (const dz of merchant.deliveryZones) {
+          const match = dz.zones.find(z => clientTextLower.includes(z.toLowerCase()));
+          if (match) { foundZone = match; break; }
+        }
+        if (foundZone) {
+          setStateField(state, 'deliveryZone', foundZone, wasVoiceMessage);
+        }
+      }
+
+      // PARTIE 2 : envoi de photo — logique séparée, inchangée dans son principe
       if (mentionedProduct) {
         if (mentionedProduct.colorVariants) {
           let instruction = photoMatch ? photoMatch[1].trim() : null;
 
-          if (!instruction) {
-            const clientTextLower = text.toLowerCase();
-            const clientColor = mentionedProduct.colorVariants.find(c => {
-              const colorLower = c.color.toLowerCase();
-              const labelLower = (c.label || c.color).toLowerCase();
-              return clientTextLower.includes(colorLower) || clientTextLower.includes(labelLower);
-            });
-            if (clientColor) {
-              setStateField(state, 'color', clientColor.color, wasVoiceMessage);
+          if (!instruction && detectedColor) {
+            const isPhotoColor = mentionedProduct.colorVariants.some(c => c.color === detectedColor);
+            if (isPhotoColor) {
+              instruction = `couleur=${detectedColor}`;
             }
           }
-          if (merchant.deliveryZones) {
-            const zoneMatch = findDeliveryZone(merchant.deliveryZones, text);
-            // findDeliveryZone cherche une correspondance exacte ; pour capter la zone
-            // dans une phrase libre, on cherche plutôt si un nom de zone connu apparaît
-            // dans le texte du client
-            const clientTextLower = text.toLowerCase();
-            let foundZone = null;
-            for (const dz of merchant.deliveryZones) {
-              const match = dz.zones.find(z => clientTextLower.includes(z.toLowerCase()));
-              if (match) {
-                foundZone = match;
-                break;
-              }
-            }
-            if (foundZone) {
-              setStateField(state, 'deliveryZone', foundZone, wasVoiceMessage);
-            }
-          } 
 
           if (instruction === 'toutes') {
             for (const variant of mentionedProduct.colorVariants) {
               await sendWhatsAppImage(
-                phoneNumberId,
-                from,
-                variant.imageUrl,
+                phoneNumberId, from, variant.imageUrl,
                 `${mentionedProduct.name} (${variant.label || variant.color}) — ${mentionedProduct.price}`
               );
             }
@@ -595,9 +609,7 @@ export default async function handler(req, res) {
             );
             if (matchedColor) {
               await sendWhatsAppImage(
-                phoneNumberId,
-                from,
-                matchedColor.imageUrl,
+                phoneNumberId, from, matchedColor.imageUrl,
                 `${mentionedProduct.name} (${matchedColor.label || matchedColor.color}) — ${mentionedProduct.price}`
               );
             }
