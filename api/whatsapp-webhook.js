@@ -15,6 +15,7 @@ function buildProductListText(products) {
 function buildDeliveryText(deliveryZones) {
   return deliveryZones.map(dz => `${dz.zones.join('/')} : ${dz.price} FCFA`).join(', ');
 }
+
 function buildSystemPrompt(merchantInfo) {
   return `Tu es l'assistant WhatsApp de ${merchantInfo.name}, boutique de vêtements à Dakar.
 
@@ -76,17 +77,24 @@ Si tu as précédemment proposé une commande sans ajouter le marqueur
 [COMMANDE:...] (parce que l'information venait d'un message vocal et tu 
 attendais une confirmation écrite), et que le client confirme maintenant 
 clairement par écrit (ex: "oui", "confirmé", "c'est bon"), tu DOIS 
-impérativement ajouter le marqueur [COMMANDE: produit=NOM; zone=ZONE; 
-total=MONTANT] dans TA RÉPONSE À CE MESSAGE DE CONFIRMATION — c'est le 
-moment précis où la commande doit être transmise au commerçant, pas avant.
+impérativement ajouter le marqueur [COMMANDE: produit=NOM; taille=TAILLE; 
+couleur=COULEUR; zone=ZONE; total=MONTANT] dans TA RÉPONSE À CE MESSAGE DE 
+CONFIRMATION — c'est le moment précis où la commande doit être transmise 
+au commerçant, pas avant.
+
+IMPORTANT : le marqueur [COMMANDE:...] n'est qu'une PROPOSITION. Le système 
+vérifie automatiquement chaque donnée avant de transmettre quoi que ce soit 
+au commerçant — ne dis donc jamais au client que sa commande est "enregistrée" 
+ou "validée" tant que tu n'as pas de certitude complète sur produit, taille, 
+couleur et zone. Utilise plutôt une formule comme "C'est noté, je transmets 
+votre commande !"
 
 RÈGLE DE FIABILITÉ DU MARQUEUR COMMANDE :
-Quand tu génères le marqueur [COMMANDE: produit=...; zone=...; total=...], 
-la valeur de "zone" DOIT être exactement identique à la zone de livraison 
-que tu viens d'utiliser dans ta phrase pour calculer le prix de livraison 
-et le total. Ne reformule jamais ni ne change cette zone entre le moment où 
-tu l'annonces au client et le moment où tu la mets dans le marqueur — 
-recopie-la mot pour mot.
+Quand tu génères le marqueur [COMMANDE:...], la valeur de "zone" DOIT être 
+exactement identique à la zone de livraison que tu viens d'utiliser dans ta 
+phrase pour calculer le prix de livraison et le total. Ne reformule jamais 
+ni ne change cette zone entre le moment où tu l'annonces au client et le 
+moment où tu la mets dans le marqueur — recopie-la mot pour mot.
 
 Après une commande confirmée, si le client répond par un message court sans 
 nouvelle demande (ex: "Ok", "Merci", "👍"), ne recommence PAS une salutation 
@@ -113,14 +121,12 @@ function findDeliveryZone(deliveryZones, zoneName) {
 }
 
 function parsePrice(priceStr) {
-  // "18 000 FCFA" -> 18000
   return parseInt(String(priceStr).replace(/[^\d]/g, ''), 10);
 }
 
 function validateOrder(state, merchant) {
   const errors = [];
 
-  // 1. Produit confirmé et existant
   if (!state.product.confirmed || !state.product.value) {
     errors.push('produit non confirmé');
   }
@@ -129,7 +135,6 @@ function validateOrder(state, merchant) {
     errors.push('produit introuvable dans le catalogue');
   }
 
-  // 2. Taille confirmée et valide pour CE produit
   if (product && product.sizes) {
     if (!state.size.confirmed || !state.size.value) {
       errors.push('taille non confirmée');
@@ -138,7 +143,6 @@ function validateOrder(state, merchant) {
     }
   }
 
-  // 3. Couleur confirmée et valide pour CE produit (si applicable)
   const hasColors = product && (product.colorVariants || product.extraColors || product.colors);
   if (hasColors) {
     let validColors = [];
@@ -153,7 +157,6 @@ function validateOrder(state, merchant) {
     }
   }
 
-  // 4. Zone confirmée et connue
   if (!state.deliveryZone.confirmed || !state.deliveryZone.value) {
     errors.push('zone de livraison non confirmée');
   }
@@ -162,7 +165,6 @@ function validateOrder(state, merchant) {
     errors.push('zone de livraison inconnue');
   }
 
-  // 5. Commande pas déjà envoyée
   if (state.orderSent) {
     errors.push('commande déjà transmise');
   }
@@ -171,7 +173,6 @@ function validateOrder(state, merchant) {
     return { valid: false, errors };
   }
 
-  // Calcul du prix, entièrement côté serveur — jamais celui donné par GPT
   const productPrice = parsePrice(product.price);
   const deliveryPrice = zoneMatch.price;
   const total = productPrice + deliveryPrice;
@@ -193,9 +194,6 @@ const MERCHANTS = {
     name: "AD Shoes",
     ownerWhatsApp: "33664017511",
     wavePaymentNumber: "221781645041",
-    // Pour AD Shoes, remplace :
-    // delivery: "Dakar Centre/Plateau/Médina 1 500 FCFA, ..."
-    // par :
     deliveryZones: [
       { zones: ["Dakar Centre", "Plateau", "Médina"], price: 1500 },
       { zones: ["Sacré-Cœur", "Mermoz", "Ouakam", "Yoff", "Maristes"], price: 1500 },
@@ -296,7 +294,6 @@ const MERCHANTS = {
 Object.values(MERCHANTS).forEach(m => { m.systemPrompt = buildSystemPrompt(m); });
 
 const conversationHistory = {};
-// Remplace les deux anciennes constantes par celle-ci
 const conversationState = {};
 
 function getConversationState(conversationKey) {
@@ -312,10 +309,6 @@ function getConversationState(conversationKey) {
   return conversationState[conversationKey];
 }
 
-// Met à jour un champ, en respectant une règle simple :
-// - une info venant du texte écrit est directement confirmée
-// - une info venant du vocal reste NON confirmée, sauf si elle confirme
-//   une valeur déjà confirmée précédemment (le client répète la même chose)
 function setStateField(state, field, value, isVoice) {
   const current = state[field];
   const source = isVoice ? 'voice' : 'text';
@@ -325,7 +318,6 @@ function setStateField(state, field, value, isVoice) {
     return;
   }
 
-  // Message vocal : ne confirme que si ça correspond à une valeur déjà confirmée
   if (current.confirmed && current.value === value) {
     state[field] = { value, source: 'voice_reconfirmed', confirmed: true };
   } else {
@@ -333,14 +325,15 @@ function setStateField(state, field, value, isVoice) {
   }
 }
 
-// Construit le texte de tous les messages du CLIENT uniquement (pas l'assistant),
-// du plus récent au plus ancien, pour chercher une couleur/taille/zone même si
-// elle n'a pas été répétée au tour actuel
+// Construit le texte de tous les messages du CLIENT uniquement (jamais ceux
+// de l'assistant), du plus récent au plus ancien — permet de retrouver une
+// couleur/taille/zone mentionnée par le client il y a plusieurs tours, sans
+// jamais faire confiance à ce que GPT en a déduit ou reformulé.
 function getClientMessagesText(recentHistory, currentText) {
   const clientMessages = recentHistory
     .filter(m => m.role === 'user')
     .map(m => m.content)
-    .reverse(); // du plus récent au plus ancien
+    .reverse();
   return [currentText, ...clientMessages].join(' | ').toLowerCase();
 }
 
@@ -378,18 +371,14 @@ async function transcribeWhatsAppAudio(mediaId) {
   return transcriptionData.text || null;
 }
 
-// Espace les nombres (téléphone, prix) pour que le TTS les lise chiffre par
-// chiffre / en petits groupes, plutôt que comme un seul très grand nombre.
 function formatNumbersForSpeech(text) {
   return text.replace(/\b\d{5,}\b/g, (match) => {
-    // Découpe en groupes de 2-3 chiffres, garde les 3 premiers comme indicatif
     if (match.length >= 9) {
       const country = match.slice(0, 3);
       const rest = match.slice(3);
       const groups = rest.match(/.{1,2}/g) || [];
       return `${country} ${groups.join(' ')}`;
     }
-    // Pour les prix/totaux plus courts, simple espacement par milliers
     return match.replace(/(\d)(?=(\d{3})+(?!\d))/g, '$1 ');
   });
 }
@@ -398,7 +387,6 @@ async function generateAndSendVoiceReply(phoneNumberId, to, text) {
   try {
     const speechText = formatNumbersForSpeech(text);
 
-    // 1. Génère l'audio avec OpenAI TTS
     const ttsResponse = await fetch('https://api.openai.com/v1/audio/speech', {
       method: 'POST',
       headers: {
@@ -413,7 +401,6 @@ async function generateAndSendVoiceReply(phoneNumberId, to, text) {
     });
     const audioBuffer = await ttsResponse.arrayBuffer();
 
-    // 2. Upload l'audio vers l'API Media de WhatsApp
     const formData = new FormData();
     formData.append('file', new Blob([audioBuffer], { type: 'audio/mpeg' }), 'reply.mp3');
     formData.append('messaging_product', 'whatsapp');
@@ -434,7 +421,6 @@ async function generateAndSendVoiceReply(phoneNumberId, to, text) {
       return;
     }
 
-    // 3. Envoie le message vocal en référençant ce media_id
     await fetch(`https://graph.facebook.com/v21.0/${phoneNumberId}/messages`, {
       method: 'POST',
       headers: {
@@ -450,7 +436,6 @@ async function generateAndSendVoiceReply(phoneNumberId, to, text) {
     });
   } catch (err) {
     console.error('Erreur génération/envoi TTS:', err);
-    // Pas grave si ça échoue : le texte est déjà parti, le client a sa réponse
   }
 }
 
@@ -488,7 +473,6 @@ export default async function handler(req, res) {
           return res.status(200).send('OK');
         }
         wasVoiceMessage = true;
-        // Marque ce message comme vocal pour que GPT applique la règle de sécurité
         text = `[MESSAGE VOCAL - transcription potentiellement imparfaite] ${text}`;
       }
       if (!text) return res.status(200).send('OK');
@@ -525,18 +509,11 @@ export default async function handler(req, res) {
       const finalClientText = replyText.replace(/\[PHOTO:.+?\]/, '').replace(/\[COMMANDE:.+?\]/, '').trim();
       if (finalClientText) {
         await sendWhatsAppText(phoneNumberId, from, finalClientText);
-
-        // Si le client a écrit en vocal, on répond aussi en vocal (en plus du texte)
         if (wasVoiceMessage) {
           await generateAndSendVoiceReply(phoneNumberId, from, finalClientText);
         }
       }
 
-      // Recherche du produit : uniquement le tour actuel (pas tout l'historique),
-      // avec la mémoire lastProductPerConversation comme filet de sécurité pour
-      // les références implicites ("celui-là") — évite de renvoyer la photo à
-      // chaque tour suivant sans raison.
-      // Recherche du produit : remplace l'ancien mentionedProduct/lastProductPerConversation
       const searchText = [text, finalClientText].join(' ').toLowerCase();
       let mentionedProduct = merchant.products.find(p => searchText.includes(p.name.toLowerCase()));
 
@@ -548,7 +525,6 @@ export default async function handler(req, res) {
 
       const clientHistoryLower = getClientMessagesText(recentHistory, text);
 
-      // Pour la taille
       if (mentionedProduct && mentionedProduct.sizes) {
         const sizeMatch = mentionedProduct.sizes.find(s => {
           const regex = new RegExp(`\\b${s}\\b`);
@@ -558,14 +534,6 @@ export default async function handler(req, res) {
           setStateField(state, 'size', sizeMatch, wasVoiceMessage);
         }
       }
-
-      // Pour la couleur
-      const found = allColors.find(c =>
-        clientHistoryLower.includes(c.value.toLowerCase()) || clientHistoryLower.includes(c.label.toLowerCase())
-      );
-
-      // Pour la zone
-      const match = dz.zones.find(z => clientHistoryLower.includes(z.toLowerCase()));
 
       let detectedColor = null;
       if (mentionedProduct) {
@@ -582,9 +550,8 @@ export default async function handler(req, res) {
           allColors = allColors.concat(mentionedProduct.colors.map(c => ({ value: c, label: c })));
         }
 
-        const clientTextLower = text.toLowerCase();
         const found = allColors.find(c =>
-          clientTextLower.includes(c.value.toLowerCase()) || clientTextLower.includes(c.label.toLowerCase())
+          clientHistoryLower.includes(c.value.toLowerCase()) || clientHistoryLower.includes(c.label.toLowerCase())
         );
         if (found) {
           detectedColor = found.value;
@@ -593,10 +560,9 @@ export default async function handler(req, res) {
       }
 
       if (merchant.deliveryZones) {
-        const clientTextLower = text.toLowerCase();
         let foundZone = null;
         for (const dz of merchant.deliveryZones) {
-          const match = dz.zones.find(z => clientTextLower.includes(z.toLowerCase()));
+          const match = dz.zones.find(z => clientHistoryLower.includes(z.toLowerCase()));
           if (match) { foundZone = match; break; }
         }
         if (foundZone) {
@@ -604,7 +570,6 @@ export default async function handler(req, res) {
         }
       }
 
-      // PARTIE 2 : envoi de photo — logique séparée, inchangée dans son principe
       if (mentionedProduct) {
         if (mentionedProduct.colorVariants) {
           let instruction = photoMatch ? photoMatch[1].trim() : null;
@@ -640,7 +605,6 @@ export default async function handler(req, res) {
         }
       }
 
-      // Notification de commande, avec garde-fou de sécurité vocale.
       if (orderMatch && merchant.ownerWhatsApp) {
         if (wasVoiceMessage) {
           console.log('DEBUG - [COMMANDE] détecté sur un message vocal non confirmé par écrit : notification bloquée par sécurité.');
@@ -661,8 +625,6 @@ export default async function handler(req, res) {
             state.orderSent = true;
           } else {
             console.log('DEBUG - Commande refusée par validateOrder:', validation.errors.join(', '));
-            // On ne notifie PAS le commerçant, et on informe le client qu'il manque
-            // encore une confirmation, plutôt que de le laisser croire que c'est réglé
             await sendWhatsAppText(
               phoneNumberId,
               from,
