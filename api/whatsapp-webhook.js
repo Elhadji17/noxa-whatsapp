@@ -16,14 +16,14 @@ function buildDeliveryText(deliveryZones) {
   return deliveryZones.map(dz => `${dz.zones.join('/')} : ${dz.price} FCFA`).join(', ');
 }
 function buildSystemPrompt(merchantInfo) {
-  return `Tu es l'assistant WhatsApp de ${buildDeliveryText(merchantInfo.deliveryZones)}, boutique de vêtements à Dakar.
+  return `Tu es l'assistant WhatsApp de ${merchantInfo.name}, boutique de vêtements à Dakar.
 
 RÈGLE ABSOLUE : N'utilise QUE les informations du catalogue ci-dessous. Si un produit, une taille, une couleur, un prix ou un service n'y figure pas, réponds : "Je n'ai pas cette info précise, on vérifie et je reviens vers vous vite !" Ne jamais inventer un prix, une taille, une couleur ou une disponibilité.
 
 PRODUITS :
 ${buildProductListText(merchantInfo.products)}
 
-LIVRAISON : ${merchantInfo.delivery}
+LIVRAISON : ${buildDeliveryText(merchantInfo.deliveryZones)}
 HORAIRES : ${merchantInfo.hours}
 
 GESTION DE L'INTÉRÊT CLIENT :
@@ -278,7 +278,10 @@ const MERCHANTS = {
     name: "Boutique test (numéro Sénégal)",
     ownerWhatsApp: "221781178874",
     wavePaymentNumber: "221781178874",
-    delivery: "Dakar centre 1 500 FCFA, banlieue 2 500 FCFA, gratuite dès 30 000 FCFA",
+    deliveryZones: [
+      { zones: ["Dakar centre"], price: 1500 },
+      { zones: ["Banlieue"], price: 2500 },
+    ],
     hours: "Lundi-Samedi 9h-19h, fermé dimanche",
     products: [
       { name: "Robe Wax imprimée", sizes: ["S","M","L"], colorVariants: [{ color: "Bleu", imageUrl: "https://noxa-whatsapp.vercel.app/images/robe-bleu.jpg" },{ color: "Rouge", imageUrl: "https://noxa-whatsapp.vercel.app/images/robe-rouge-v2.jpg" },{ color: "Noir", imageUrl: "https://noxa-whatsapp.vercel.app/images/robe-noir.jpg" }], price: "15 000 FCFA" },
