@@ -61,33 +61,17 @@ comme un mot incohérent).
 
 Si une information critique (taille, produit, ou couleur en cas d'ambiguïté) 
 provient UNIQUEMENT d'un message marqué [MESSAGE VOCAL] et n'a jamais été 
-confirmée clairement ensuite, tu ne dois JAMAIS :
-- l'utiliser pour finaliser une commande (marqueur [COMMANDE:...])
-- l'affirmer avec certitude au client comme si elle était sûre
+confirmée clairement ensuite, tu ne dois JAMAIS l'affirmer avec certitude au 
+client comme si elle était sûre. Demande TOUJOURS une confirmation explicite 
+avant de continuer, par exemple : "Pour être sûr, vous voulez bien confirmer 
+la pointure : 42, 43 ou 44 ?"
 
-Dans ce cas, demande TOUJOURS une confirmation explicite avant de continuer, 
-par exemple : "Pour être sûr, vous voulez bien confirmer la pointure : 42, 
-43 ou 44 ?" N'ajoute le marqueur [COMMANDE:...] que lorsque le produit, la 
-taille et la couleur (si applicable) ont été confirmés sans ambiguïté, que 
-ce soit par écrit ou par une réponse vocale limpide et non ambiguë (par 
-exemple si le client répète clairement un seul chiffre en réponse à ta 
-question de clarification).
-
-Si tu as précédemment proposé une commande sans ajouter le marqueur 
-[COMMANDE:...] (parce que l'information venait d'un message vocal et tu 
-attendais une confirmation écrite), et que le client confirme maintenant 
-clairement par écrit (ex: "oui", "confirmé", "c'est bon"), tu DOIS 
-impérativement ajouter le marqueur [COMMANDE: produit=NOM; taille=TAILLE; 
-couleur=COULEUR; zone=ZONE; total=MONTANT] dans TA RÉPONSE À CE MESSAGE DE 
-CONFIRMATION — c'est le moment précis où la commande doit être transmise 
-au commerçant, pas avant.
-
-IMPORTANT : le marqueur [COMMANDE:...] n'est qu'une PROPOSITION. Le système 
-vérifie automatiquement chaque donnée avant de transmettre quoi que ce soit 
-au commerçant — ne dis donc jamais au client que sa commande est "enregistrée" 
-ou "validée" tant que tu n'as pas de certitude complète sur produit, taille, 
-couleur et zone. Utilise plutôt une formule comme "C'est noté, je transmets 
-votre commande !"
+IMPORTANT : le système vérifie automatiquement chaque donnée avant de 
+transmettre quoi que ce soit au commerçant. Le client peut confirmer par un 
+simple message ("oui", "confirmé", "c'est bon") — le système gère cette 
+confirmation lui-même. Ne dis donc jamais au client que sa commande est 
+"enregistrée" ou "transmise" — dis plutôt "Je note votre commande, merci de 
+confirmer par un simple message pour que je la transmette !"
 
 RÈGLE DE FIABILITÉ DU MARQUEUR COMMANDE :
 Quand tu génères le marqueur [COMMANDE:...], la valeur de "zone" DOIT être 
@@ -97,17 +81,17 @@ ni ne change cette zone entre le moment où tu l'annonces au client et le
 moment où tu la mets dans le marqueur — recopie-la mot pour mot.
 
 Après une commande confirmée, si le client répond par un message court sans 
-nouvelle demande (ex: "Ok", "Merci", "👍"), ne recommence PAS une salutation 
+nouvelle demande (ex: "Merci", "👍"), ne recommence PAS une salutation 
 générique comme si la conversation était nouvelle — réponds simplement de 
-façon chaleureuse et brève, par exemple "Avec plaisir ! N'hésitez pas si vous 
-avez besoin d'autre chose. 🙏"
+façon chaleureuse et brève.
 
 GESTION DE LA CONFIRMATION DE COMMANDE :
-Quand une commande est confirmée (et seulement après avoir respecté la 
-RÈGLE DE SÉCURITÉ VOCALE ci-dessus si applicable), termine par :
+Dès que le produit, la taille (si applicable), la couleur (si applicable) et 
+la zone de livraison sont tous connus (même s'ils ne sont pas encore 
+confirmés par écrit), termine ta réponse par :
 [COMMANDE: produit=NOM; taille=TAILLE; couleur=COULEUR; zone=ZONE; total=MONTANT]
 Utilise "aucune" si la taille ou la couleur ne s'applique pas à ce produit.
-Une seule fois par commande.
+Une seule fois par ensemble de données (pas à chaque message qui suit).
 
 TON : Chaleureux, direct, mélange naturel français/wolof simple ("Waaw", "am nañu ko", "jërejëf"). Réponses courtes, 2-3 phrases max.`;
 }
@@ -187,6 +171,25 @@ function validateOrder(state, merchant) {
       total,
     },
   };
+}
+
+// Détecte si un message texte est une confirmation courte et sans ambiguïté
+function isAffirmativeConfirmation(text) {
+  const cleaned = text.toLowerCase().trim().replace(/[.!?]/g, '');
+  const affirmatives = ['oui', 'waaw', 'confirmé', 'confirme', "c'est bon", 'cest bon', 'ok', "d'accord"];
+  return affirmatives.includes(cleaned);
+}
+
+async function sendOrderNotification(phoneNumberId, merchant, from, orderDetails) {
+  await fetch(`https://graph.facebook.com/v21.0/${phoneNumberId}/messages`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}` },
+    body: JSON.stringify({
+      messaging_product: 'whatsapp',
+      to: merchant.ownerWhatsApp,
+      text: { body: `🛍️ Nouvelle commande !\nProduit: ${orderDetails.product}\nTaille: ${orderDetails.size}\nCouleur: ${orderDetails.color}\nZone: ${orderDetails.zone}\nTotal: ${orderDetails.total} FCFA\nClient: ${from}\n\nVérifiez votre app Wave pour confirmer la réception du paiement avant de valider.` },
+    }),
+  });
 }
 
 const MERCHANTS = {
@@ -304,6 +307,7 @@ function getConversationState(conversationKey) {
       color: { value: null, source: null, confirmed: false },
       deliveryZone: { value: null, source: null, confirmed: false },
       orderSent: false,
+      pendingVoiceOrder: false,
     };
   }
   return conversationState[conversationKey];
@@ -325,10 +329,6 @@ function setStateField(state, field, value, isVoice) {
   }
 }
 
-// Construit le texte de tous les messages du CLIENT uniquement (jamais ceux
-// de l'assistant), du plus récent au plus ancien — permet de retrouver une
-// couleur/taille/zone mentionnée par le client il y a plusieurs tours, sans
-// jamais faire confiance à ce que GPT en a déduit ou reformulé.
 function getClientMessagesText(recentHistory, currentText) {
   const clientMessages = recentHistory
     .filter(m => m.role === 'user')
@@ -463,7 +463,8 @@ export default async function handler(req, res) {
         return res.status(200).send('OK');
       }
 
-      let text = message.text?.body;
+      let rawText = message.text?.body;
+      let text = rawText;
       let wasVoiceMessage = false;
 
       if (message.type === 'audio' && message.audio?.id) {
@@ -472,6 +473,7 @@ export default async function handler(req, res) {
           await sendWhatsAppText(phoneNumberId, from, "Je n'ai pas bien compris votre message vocal, pouvez-vous réessayer ou l'écrire en texte ?");
           return res.status(200).send('OK');
         }
+        rawText = text;
         wasVoiceMessage = true;
         text = `[MESSAGE VOCAL - transcription potentiellement imparfaite] ${text}`;
       }
@@ -482,6 +484,35 @@ export default async function handler(req, res) {
 
       const conversationKey = `${phoneNumberId}_${from}`;
       const state = getConversationState(conversationKey);
+
+      // FILET DE SÉCURITÉ EN CODE : si une commande était en attente de
+      // confirmation écrite (bloquée précédemment car issue du vocal), et que
+      // ce nouveau message est un texte de confirmation courte et sans
+      // ambiguïté, on promeut nous-mêmes les données comme confirmées et on
+      // valide directement — sans dépendre de GPT pour réémettre un marqueur.
+      if (state.pendingVoiceOrder && !wasVoiceMessage && isAffirmativeConfirmation(rawText)) {
+        if (state.product.value) state.product = { ...state.product, confirmed: true };
+        if (state.size.value) state.size = { ...state.size, confirmed: true };
+        if (state.color.value) state.color = { ...state.color, confirmed: true };
+        if (state.deliveryZone.value) state.deliveryZone = { ...state.deliveryZone, confirmed: true };
+        state.pendingVoiceOrder = false;
+
+        const validation = validateOrder(state, merchant);
+        if (validation.valid) {
+          await sendOrderNotification(phoneNumberId, merchant, from, validation.orderDetails);
+          state.orderSent = true;
+          await sendWhatsAppText(phoneNumberId, from, "Parfait, c'est confirmé ! Votre commande a bien été transmise. Jërejëf ! 🙏");
+        } else {
+          console.log('DEBUG - Confirmation reçue mais validateOrder refuse:', validation.errors.join(', '));
+          await sendWhatsAppText(phoneNumberId, from, "Merci ! Il me manque encore une info pour finaliser — pouvez-vous reconfirmer le produit, la taille, la couleur et la zone ? 🙏");
+        }
+        // On enregistre quand même ce tour dans l'historique avant de sortir
+        if (!conversationHistory[conversationKey]) conversationHistory[conversationKey] = [];
+        conversationHistory[conversationKey].push({ role: 'user', content: text });
+        conversationHistory[conversationKey].push({ role: 'assistant', content: '(confirmation traitée directement)' });
+        return res.status(200).send('OK');
+      }
+
       if (!conversationHistory[conversationKey]) conversationHistory[conversationKey] = [];
       conversationHistory[conversationKey].push({ role: 'user', content: text });
       const recentHistory = conversationHistory[conversationKey].slice(-10);
@@ -607,29 +638,16 @@ export default async function handler(req, res) {
 
       if (orderMatch && merchant.ownerWhatsApp) {
         if (wasVoiceMessage) {
-          console.log('DEBUG - [COMMANDE] détecté sur un message vocal non confirmé par écrit : notification bloquée par sécurité.');
+          console.log('DEBUG - [COMMANDE] détecté sur un message vocal non confirmé par écrit : notification bloquée, en attente de confirmation.');
+          state.pendingVoiceOrder = true;
         } else {
           const validation = validateOrder(state, merchant);
 
           if (validation.valid) {
-            const d = validation.orderDetails;
-            await fetch(`https://graph.facebook.com/v21.0/${phoneNumberId}/messages`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}` },
-              body: JSON.stringify({
-                messaging_product: 'whatsapp',
-                to: merchant.ownerWhatsApp,
-                text: { body: `🛍️ Nouvelle commande !\nProduit: ${d.product}\nTaille: ${d.size}\nCouleur: ${d.color}\nZone: ${d.zone}\nTotal: ${d.total} FCFA\nClient: ${from}\n\nVérifiez votre app Wave pour confirmer la réception du paiement avant de valider.` },
-              }),
-            });
+            await sendOrderNotification(phoneNumberId, merchant, from, validation.orderDetails);
             state.orderSent = true;
           } else {
             console.log('DEBUG - Commande refusée par validateOrder:', validation.errors.join(', '));
-            await sendWhatsAppText(
-              phoneNumberId,
-              from,
-              "Il me manque encore une information pour finaliser votre commande — pouvez-vous confirmer le produit, la taille, la couleur et votre zone de livraison ? 🙏"
-            );
           }
         }
       }
