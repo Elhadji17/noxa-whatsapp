@@ -160,7 +160,10 @@ function normalizeText(value) {
 // catalogue mot pour mot.
 function productMatchesText(product, normalizedText) {
   const nameWords = normalizeText(product.name).split(' ').filter(w => w.length >= 3);
-  return nameWords.some(w => normalizedText.includes(w));
+  const aliasWords = (product.aliases || []).flatMap(a =>
+    normalizeText(a).split(' ').filter(w => w.length >= 3)
+  );
+  return [...nameWords, ...aliasWords].some(w => normalizedText.includes(w));
 }
 
 function findDeliveryZone(deliveryZones, zoneName) {
@@ -260,6 +263,7 @@ const MERCHANTS = {
     products: [
       {
         name: "Moccasin Cuir Dakar Classic",
+        aliases: ["mocassin"],
         sizes: ["39", "40", "41", "42", "43", "44"],
         colorVariants: [
           { color: "Noir", imageUrl: "https://noxa-whatsapp.vercel.app/images/moccasin-noir.jpg" },
