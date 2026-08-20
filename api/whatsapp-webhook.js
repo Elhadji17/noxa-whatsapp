@@ -51,6 +51,26 @@ au client :
 - Toutes les couleurs demandées : [PHOTO: toutes]
 - Aucune couleur encore choisie : n'ajoute aucun marqueur
 Ne dis JAMAIS que tu n'as pas de photo disponible.
+Utilise toujours le nom de couleur SANS le surnom entre parenthèses dans ce 
+marqueur (ex: "couleur=Bleu", pas "couleur=Bleu (Modou LO)").
+
+GESTION DES PROPOSITIONS (confirmation implicite) :
+Quand tu poses une question de confirmation portant sur une ou plusieurs 
+valeurs précises que TU proposes toi-même (ex: "c'est bien la taille 42 ?", 
+"Bleu (Modou LO), c'est bien ça ?", "vous confirmez Médina ?"), termine ta 
+réponse par un marqueur sur sa propre ligne, jamais visible au client :
+[PROPOSITION: champ=valeur; champ2=valeur2]
+Où "champ" est l'un de : produit, taille, couleur, zone.
+Utilise le nom de couleur SANS le surnom entre parenthèses (ex: "couleur=Bleu").
+Utilise la zone exactement comme listée dans LIVRAISON ci-dessus.
+N'ajoute ce marqueur QUE quand tu poses une vraie question fermée (oui/non) 
+portant sur une valeur précise — jamais dans une réponse purement informative.
+Si le client répond ensuite par une courte confirmation ("oui", "ok", etc.) 
+sans répéter la valeur, le système la validera automatiquement grâce à ce 
+marqueur — tu n'as rien d'autre à faire.
+C'est le SEUL moyen pour qu'une confirmation implicite ("oui" tout seul) 
+valide une donnée : le système ne réutilise plus jamais un ancien message 
+pour deviner ce qu'un "oui" confirme.
 
 RÈGLE DE SÉCURITÉ VOCALE (TRÈS IMPORTANT) :
 Certains messages du client sont précédés de "[MESSAGE VOCAL - transcription 
@@ -67,16 +87,19 @@ confirmée clairement ensuite, tu ne dois JAMAIS :
 
 Dans ce cas, demande TOUJOURS une confirmation explicite avant de continuer, 
 par exemple : "Pour être sûr, vous voulez bien confirmer la pointure : 42, 
-43 ou 44 ?" N'ajoute le marqueur [COMMANDE:...] que lorsque le produit, la 
-taille et la couleur (si applicable) ont été confirmés sans ambiguïté, que 
-ce soit par écrit ou par une réponse vocale limpide et non ambiguë (par 
-exemple si le client répète clairement un seul chiffre en réponse à ta 
-question de clarification).
+43 ou 44 ?" (avec le marqueur [PROPOSITION:...] correspondant). Toute donnée 
+critique confirmée après un message vocal doit systématiquement passer par 
+une confirmation écrite explicite — un vocal, même limpide, ne suffit jamais 
+seul à confirmer une commande.
+
+IMPORTANT : tant qu'une information critique n'est pas confirmée, ne dis 
+JAMAIS "je transmets votre commande" ni rien de similaire qui suggère que 
+c'est déjà fait. Dis plutôt clairement que tu as besoin d'une confirmation, 
+par exemple : "Pouvez-vous confirmer pour que je transmette votre commande ?"
 
 Si tu as précédemment proposé une commande sans ajouter le marqueur 
-[COMMANDE:...] (parce que l'information venait d'un message vocal et tu 
-attendais une confirmation écrite), et que le client confirme maintenant 
-clairement par écrit (ex: "oui", "ok", "okay", "confirmé", "c'est bon", "d'accord", "ça marche"), tu DOIS 
+[COMMANDE:...], et que le client confirme maintenant clairement par écrit 
+(ex: "oui", "ok", "okay", "confirmé", "c'est bon", "d'accord"), tu DOIS 
 impérativement ajouter le marqueur [COMMANDE: produit=NOM; taille=TAILLE; 
 couleur=COULEUR; zone=ZONE; total=MONTANT] dans TA RÉPONSE À CE MESSAGE DE 
 CONFIRMATION — c'est le moment précis où la commande doit être transmise 
@@ -96,6 +119,11 @@ phrase pour calculer le prix de livraison et le total. Ne reformule jamais
 ni ne change cette zone entre le moment où tu l'annonces au client et le 
 moment où tu la mets dans le marqueur — recopie-la mot pour mot.
 
+Si le client change d'avis sur le produit en cours de conversation, sache 
+que le système réinitialise automatiquement la taille et la couleur 
+précédemment retenues — redemande-les si besoin, ne suppose jamais qu'elles 
+s'appliquent encore au nouveau produit.
+
 Après une commande confirmée, si le client répond par un message court sans 
 nouvelle demande (ex: "Ok", "Merci", "👍"), ne recommence PAS une salutation 
 générique comme si la conversation était nouvelle — réponds simplement de 
@@ -108,21 +136,28 @@ RÈGLE DE SÉCURITÉ VOCALE ci-dessus si applicable), termine par :
 [COMMANDE: produit=NOM; taille=TAILLE; couleur=COULEUR; zone=ZONE; total=MONTANT]
 Utilise "aucune" si la taille ou la couleur ne s'applique pas à ce produit.
 Une seule fois par commande.
-Si une information critique vient UNIQUEMENT d'un message vocal non encore 
-confirmé par écrit, tu ne dois PAS dire "je transmets votre commande" ni 
-rien de similaire. Dis plutôt clairement que tu as besoin d'une confirmation 
-écrite pour finaliser, par exemple : "Pouvez-vous juste taper 'oui' pour 
-confirmer votre commande ?" — et attends cette réponse avant de dire quoi 
-que ce soit sur la transmission de la commande.
 
 TON : Chaleureux, direct, mélange naturel français/wolof simple ("Waaw", "am nañu ko", "jërejëf"). Réponses courtes, 2-3 phrases max.`;
 }
 
+// Retire les accents/diacritiques pour des comparaisons plus tolérantes
+// (ex: "sacre coeur" doit matcher "Sacré-Cœur").
+function normalizeText(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/['']/g, "'")
+    .replace(/[-/]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function findDeliveryZone(deliveryZones, zoneName) {
   if (!zoneName) return null;
-  const zoneLower = zoneName.toLowerCase();
+  const zoneNorm = normalizeText(zoneName);
   return deliveryZones.find(dz =>
-    dz.zones.some(z => z.toLowerCase() === zoneLower)
+    dz.zones.some(z => normalizeText(z) === zoneNorm)
   );
 }
 
@@ -158,7 +193,7 @@ function validateOrder(state, merchant) {
 
     if (!state.color.confirmed || !state.color.value) {
       errors.push('couleur non confirmée');
-    } else if (!validColors.some(c => c.toLowerCase() === state.color.value.toLowerCase())) {
+    } else if (!validColors.some(c => normalizeText(c) === normalizeText(state.color.value))) {
       errors.push('couleur invalide pour ce produit');
     }
   }
@@ -181,14 +216,19 @@ function validateOrder(state, merchant) {
 
   const productPrice = parsePrice(product.price);
   const deliveryPrice = zoneMatch.price;
+
+  if (!Number.isFinite(productPrice) || !Number.isFinite(deliveryPrice)) {
+    return { valid: false, errors: ['prix invalide, vérifiez la configuration du catalogue'] };
+  }
+
   const total = productPrice + deliveryPrice;
 
   return {
     valid: true,
     orderDetails: {
       product: product.name,
-      size: state.size.value,
-      color: state.color.value,
+      size: product.sizes ? state.size.value : null,
+      color: hasColors ? state.color.value : null,
       zone: state.deliveryZone.value,
       total,
     },
@@ -302,14 +342,19 @@ Object.values(MERCHANTS).forEach(m => { m.systemPrompt = buildSystemPrompt(m); }
 const conversationHistory = {};
 const conversationState = {};
 
+function emptyField() {
+  return { value: null, source: null, confirmed: false };
+}
+
 function getConversationState(conversationKey) {
   if (!conversationState[conversationKey]) {
     conversationState[conversationKey] = {
-      product: { value: null, source: null, confirmed: false },
-      size: { value: null, source: null, confirmed: false },
-      color: { value: null, source: null, confirmed: false },
-      deliveryZone: { value: null, source: null, confirmed: false },
+      product: emptyField(),
+      size: emptyField(),
+      color: emptyField(),
+      deliveryZone: emptyField(),
       orderSent: false,
+      pendingProposals: null,
     };
   }
   return conversationState[conversationKey];
@@ -331,20 +376,31 @@ function setStateField(state, field, value, isVoice) {
   }
 }
 
-// Construit le texte de tous les messages du CLIENT uniquement (jamais ceux
-// de l'assistant), du plus récent au plus ancien — permet de retrouver une
-// couleur/taille/zone mentionnée par le client il y a plusieurs tours, sans
-// jamais faire confiance à ce que GPT en a déduit ou reformulé.
-function getClientMessagesText(recentHistory, currentText) {
-  const clientMessages = recentHistory
-    .filter(m => m.role === 'user')
-    .map(m => m.content)
-    .reverse();
-  return [currentText, ...clientMessages].join(' | ').toLowerCase();
+function currentClientTextLower(rawText) {
+  return normalizeText(rawText.replace(/^\[MESSAGE VOCAL[^\]]*\]\s*/i, ''));
+}
+
+function isShortAffirmative(rawText) {
+  const cleaned = currentClientTextLower(rawText);
+  return /^(oui+|ouais|ok+|okay|d'accord|daccord|c'est bon|cest bon|ca marche|confirme|parfait|va y)$/i.test(cleaned);
+}
+
+const FIELD_MAP = { produit: 'product', taille: 'size', couleur: 'color', zone: 'deliveryZone' };
+
+// Wrapper simple pour éviter qu'un appel externe bloqué ne fasse traîner
+// indéfiniment le webhook (timeout par défaut : 20 secondes).
+async function fetchWithTimeout(url, options = {}, timeoutMs = 20000) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 async function sendWhatsAppText(phoneNumberId, to, body) {
-  await fetch(`https://graph.facebook.com/v21.0/${phoneNumberId}/messages`, {
+  await fetchWithTimeout(`https://graph.facebook.com/v21.0/${phoneNumberId}/messages`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}` },
     body: JSON.stringify({ messaging_product: 'whatsapp', to, text: { body } }),
@@ -352,7 +408,7 @@ async function sendWhatsAppText(phoneNumberId, to, body) {
 }
 
 async function sendWhatsAppImage(phoneNumberId, to, imageUrl, caption) {
-  const response = await fetch(`https://graph.facebook.com/v21.0/${phoneNumberId}/messages`, {
+  const response = await fetchWithTimeout(`https://graph.facebook.com/v21.0/${phoneNumberId}/messages`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}` },
     body: JSON.stringify({ messaging_product: 'whatsapp', to, type: 'image', image: { link: imageUrl, caption: caption || '' } }),
@@ -362,17 +418,21 @@ async function sendWhatsAppImage(phoneNumberId, to, imageUrl, caption) {
 }
 
 async function transcribeWhatsAppAudio(mediaId) {
-  const mediaInfoResponse = await fetch(`https://graph.facebook.com/v21.0/${mediaId}`, { headers: { 'Authorization': `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}` } });
+  const mediaInfoResponse = await fetchWithTimeout(`https://graph.facebook.com/v21.0/${mediaId}`, { headers: { 'Authorization': `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}` } });
   const mediaInfo = await mediaInfoResponse.json();
-  const audioResponse = await fetch(mediaInfo.url, { headers: { 'Authorization': `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}` } });
+  const audioResponse = await fetchWithTimeout(mediaInfo.url, { headers: { 'Authorization': `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}` } });
   const audioBuffer = await audioResponse.arrayBuffer();
   const formData = new FormData();
   formData.append('file', new Blob([audioBuffer], { type: 'audio/ogg' }), 'audio.ogg');
   formData.append('model', 'whisper-1');
   formData.append('language', 'fr');
-  const transcriptionResponse = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+  const transcriptionResponse = await fetchWithTimeout('https://api.openai.com/v1/audio/transcriptions', {
     method: 'POST', headers: { 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}` }, body: formData,
   });
+  if (!transcriptionResponse.ok) {
+    console.error('DEBUG - Échec transcription:', await transcriptionResponse.text());
+    return null;
+  }
   const transcriptionData = await transcriptionResponse.json();
   return transcriptionData.text || null;
 }
@@ -393,7 +453,7 @@ async function generateAndSendVoiceReply(phoneNumberId, to, text) {
   try {
     const speechText = formatNumbersForSpeech(text);
 
-    const ttsResponse = await fetch('https://api.openai.com/v1/audio/speech', {
+    const ttsResponse = await fetchWithTimeout('https://api.openai.com/v1/audio/speech', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -405,13 +465,17 @@ async function generateAndSendVoiceReply(phoneNumberId, to, text) {
         input: speechText,
       }),
     });
+    if (!ttsResponse.ok) {
+      console.error('DEBUG - Échec génération TTS:', await ttsResponse.text());
+      return;
+    }
     const audioBuffer = await ttsResponse.arrayBuffer();
 
     const formData = new FormData();
     formData.append('file', new Blob([audioBuffer], { type: 'audio/mpeg' }), 'reply.mp3');
     formData.append('messaging_product', 'whatsapp');
 
-    const uploadResponse = await fetch(
+    const uploadResponse = await fetchWithTimeout(
       `https://graph.facebook.com/v21.0/${phoneNumberId}/media`,
       {
         method: 'POST',
@@ -427,7 +491,7 @@ async function generateAndSendVoiceReply(phoneNumberId, to, text) {
       return;
     }
 
-    await fetch(`https://graph.facebook.com/v21.0/${phoneNumberId}/messages`, {
+    await fetchWithTimeout(`https://graph.facebook.com/v21.0/${phoneNumberId}/messages`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -488,17 +552,32 @@ export default async function handler(req, res) {
 
       const conversationKey = `${phoneNumberId}_${from}`;
       const state = getConversationState(conversationKey);
+
+      if (state.pendingProposals) {
+        if (isShortAffirmative(text)) {
+          for (const [field, value] of Object.entries(state.pendingProposals)) {
+            setStateField(state, field, value, wasVoiceMessage);
+          }
+        }
+        state.pendingProposals = null;
+      }
+
       if (!conversationHistory[conversationKey]) conversationHistory[conversationKey] = [];
       conversationHistory[conversationKey].push({ role: 'user', content: text });
       const recentHistory = conversationHistory[conversationKey].slice(-10);
 
       let aiData;
       try {
-        const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+        const aiResponse = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}` },
           body: JSON.stringify({ model: 'gpt-4o', messages: [{ role: 'system', content: merchant.systemPrompt }, ...recentHistory] }),
         });
+        if (!aiResponse.ok) {
+          console.error('DEBUG - Échec appel OpenAI, statut:', aiResponse.status, await aiResponse.text());
+          await sendWhatsAppText(phoneNumberId, from, "Petit souci technique de notre côté, on revient vers vous très vite !");
+          return res.status(200).send('OK');
+        }
         aiData = await aiResponse.json();
       } catch (err) {
         console.error('Erreur appel OpenAI:', err);
@@ -511,30 +590,57 @@ export default async function handler(req, res) {
 
       const photoMatch = replyText.match(/\[PHOTO:\s*(.+?)\]/);
       const orderMatch = replyText.match(/\[COMMANDE:\s*(.+?)\]/);
+      const propositionMatch = replyText.match(/\[PROPOSITION:\s*(.+?)\]/);
 
-      const finalClientText = replyText.replace(/\[PHOTO:.+?\]/, '').replace(/\[COMMANDE:.+?\]/, '').trim();
+      const finalClientText = replyText
+        .replace(/\[PHOTO:.+?\]/, '')
+        .replace(/\[COMMANDE:.+?\]/, '')
+        .replace(/\[PROPOSITION:.+?\]/, '')
+        .trim();
+
       if (finalClientText) {
-        await sendWhatsAppText(phoneNumberId, from, finalClientText);
+        // Pour un message vocal, on envoie la réponse vocale en premier
+        // (plus naturel pour un client qui a lui-même parlé), puis le texte
+        // comme référence écrite.
         if (wasVoiceMessage) {
           await generateAndSendVoiceReply(phoneNumberId, from, finalClientText);
         }
+        await sendWhatsAppText(phoneNumberId, from, finalClientText);
       }
 
-      const searchText = [text, finalClientText].join(' ').toLowerCase();
-      let mentionedProduct = merchant.products.find(p => searchText.includes(p.name.toLowerCase()));
+      if (propositionMatch) {
+        const pending = {};
+        propositionMatch[1].split(';').forEach(pair => {
+          const [k, v] = pair.split('=').map(s => s && s.trim());
+          if (k && v) {
+            const field = FIELD_MAP[k.toLowerCase()];
+            if (field) pending[field] = v;
+          }
+        });
+        if (Object.keys(pending).length > 0) {
+          state.pendingProposals = pending;
+        }
+      }
+
+      const currentText = currentClientTextLower(text);
+
+      let mentionedProduct = merchant.products.find(p => currentText.includes(normalizeText(p.name)));
 
       if (mentionedProduct) {
+        const isNewProduct = state.product.value && state.product.value !== mentionedProduct.name;
         setStateField(state, 'product', mentionedProduct.name, wasVoiceMessage);
+        if (isNewProduct) {
+          state.size = emptyField();
+          state.color = emptyField();
+        }
       } else if (state.product.value) {
         mentionedProduct = merchant.products.find(p => p.name === state.product.value);
       }
 
-      const clientHistoryLower = getClientMessagesText(recentHistory, text);
-
       if (mentionedProduct && mentionedProduct.sizes) {
         const sizeMatch = mentionedProduct.sizes.find(s => {
           const regex = new RegExp(`\\b${s}\\b`);
-          return regex.test(clientHistoryLower);
+          return regex.test(currentText);
         });
         if (sizeMatch) {
           setStateField(state, 'size', sizeMatch, wasVoiceMessage);
@@ -557,7 +663,7 @@ export default async function handler(req, res) {
         }
 
         const found = allColors.find(c =>
-          clientHistoryLower.includes(c.value.toLowerCase()) || clientHistoryLower.includes(c.label.toLowerCase())
+          currentText.includes(normalizeText(c.value)) || currentText.includes(normalizeText(c.label))
         );
         if (found) {
           detectedColor = found.value;
@@ -568,7 +674,7 @@ export default async function handler(req, res) {
       if (merchant.deliveryZones) {
         let foundZone = null;
         for (const dz of merchant.deliveryZones) {
-          const match = dz.zones.find(z => clientHistoryLower.includes(z.toLowerCase()));
+          const match = dz.zones.find(z => currentText.includes(normalizeText(z)));
           if (match) { foundZone = match; break; }
         }
         if (foundZone) {
@@ -597,7 +703,7 @@ export default async function handler(req, res) {
           } else if (instruction && instruction.startsWith('couleur=')) {
             const colorName = instruction.replace('couleur=', '').trim();
             const matchedColor = mentionedProduct.colorVariants.find(c =>
-              c.color.toLowerCase() === colorName.toLowerCase()
+              normalizeText(c.color) === normalizeText(colorName)
             );
             if (matchedColor) {
               await sendWhatsAppImage(
@@ -619,16 +725,20 @@ export default async function handler(req, res) {
 
           if (validation.valid) {
             const d = validation.orderDetails;
-            await fetch(`https://graph.facebook.com/v21.0/${phoneNumberId}/messages`, {
+            const notifResponse = await fetchWithTimeout(`https://graph.facebook.com/v21.0/${phoneNumberId}/messages`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}` },
               body: JSON.stringify({
                 messaging_product: 'whatsapp',
                 to: merchant.ownerWhatsApp,
-                text: { body: `🛍️ Nouvelle commande !\nProduit: ${d.product}\nTaille: ${d.size}\nCouleur: ${d.color}\nZone: ${d.zone}\nTotal: ${d.total} FCFA\nClient: ${from}\n\nVérifiez votre app Wave pour confirmer la réception du paiement avant de valider.` },
+                text: { body: `🛍️ Nouvelle commande !\nProduit: ${d.product}\nTaille: ${d.size || 'aucune'}\nCouleur: ${d.color || 'aucune'}\nZone: ${d.zone}\nTotal: ${d.total} FCFA\nClient: ${from}\n\nVérifiez votre app Wave pour confirmer la réception du paiement avant de valider.` },
               }),
             });
-            state.orderSent = true;
+            if (notifResponse.ok) {
+              state.orderSent = true;
+            } else {
+              console.error('DEBUG - Échec envoi notification commerçant:', await notifResponse.text());
+            }
           } else {
             console.log('DEBUG - Commande refusée par validateOrder:', validation.errors.join(', '));
             await sendWhatsAppText(
