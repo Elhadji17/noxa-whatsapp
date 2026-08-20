@@ -591,6 +591,7 @@ export default async function handler(req, res) {
 
       const conversationKey = `${phoneNumberId}_${from}`;
       const state = getConversationState(conversationKey);
+      console.log('DEBUG - A - STATE INITIAL:', JSON.stringify(state));
 
       if (state.pendingProposals) {
         if (isShortAffirmative(text)) {
@@ -600,6 +601,7 @@ export default async function handler(req, res) {
         }
         state.pendingProposals = null;
       }
+      console.log('DEBUG - B - STATE APRES PROPOSITION:', JSON.stringify(state));
 
       // Détection déterministe (produit/taille/couleur/zone) AVANT l'appel
       // GPT — pas après. Ainsi l'état qu'on transmet à GPT ci-dessous reflète
@@ -665,6 +667,7 @@ export default async function handler(req, res) {
       }
 
       console.log('DEBUG - currentText:', currentText, '| produit détecté:', mentionedProduct ? mentionedProduct.name : 'AUCUN');
+      console.log('DEBUG - C - STATE APRES DETECTION:', JSON.stringify(state));
 
       if (!conversationHistory[conversationKey]) conversationHistory[conversationKey] = [];
       conversationHistory[conversationKey].push({ role: 'user', content: text });
@@ -675,6 +678,7 @@ export default async function handler(req, res) {
       // l'historique, ce qui évite qu'il "oublie" d'émettre [PROPOSITION]
       // pour une donnée encore non confirmée.
       const stateContext = buildStateContext(state);
+      console.log('DEBUG - D - STATE ENVOYE A GPT:', stateContext);
 
       let aiData;
       try {
@@ -703,6 +707,7 @@ export default async function handler(req, res) {
       }
 
       const replyText = aiData.choices?.[0]?.message?.content || "Désolé, je n'ai pas pu traiter votre message.";
+      console.log('DEBUG - GPT RAW:', replyText);
       conversationHistory[conversationKey].push({ role: 'assistant', content: replyText });
 
       const photoMatch = replyText.match(/\[PHOTO:\s*(.+?)\]/);
@@ -775,7 +780,9 @@ export default async function handler(req, res) {
         if (wasVoiceMessage) {
           console.log('DEBUG - [COMMANDE] détecté sur un message vocal non confirmé par écrit : notification bloquée par sécurité.');
         } else {
+          console.log('DEBUG - E - STATE AVANT VALIDATION:', JSON.stringify(state));
           const validation = validateOrder(state, merchant);
+          console.log('DEBUG - VALIDATION RESULT:', JSON.stringify(validation));
 
           if (validation.valid) {
             const d = validation.orderDetails;
