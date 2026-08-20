@@ -57,10 +57,13 @@ marqueur (ex: "couleur=Bleu", pas "couleur=Bleu (Modou LO)").
 GESTION DES PROPOSITIONS (confirmation implicite) :
 Quand tu poses une question de confirmation portant sur une ou plusieurs 
 valeurs précises que TU proposes toi-même (ex: "c'est bien la taille 42 ?", 
-"Bleu (Modou LO), c'est bien ça ?", "vous confirmez Médina ?"), termine ta 
-réponse par un marqueur sur sa propre ligne, jamais visible au client :
+"Bleu (Modou LO), c'est bien ça ?", "vous confirmez Médina ?", ou même le 
+PRODUIT si tu viens de le proposer/deviner), termine ta réponse par un 
+marqueur sur sa propre ligne, jamais visible au client :
 [PROPOSITION: champ=valeur; champ2=valeur2]
 Où "champ" est l'un de : produit, taille, couleur, zone.
+Pour "produit", utilise le nom EXACT et complet tel qu'il figure dans le 
+catalogue ci-dessus.
 Utilise le nom de couleur SANS le surnom entre parenthèses (ex: "couleur=Bleu").
 Utilise la zone exactement comme listée dans LIVRAISON ci-dessus.
 N'ajoute ce marqueur QUE quand tu poses une vraie question fermée (oui/non) 
@@ -69,8 +72,8 @@ Si le client répond ensuite par une courte confirmation ("oui", "ok", etc.)
 sans répéter la valeur, le système la validera automatiquement grâce à ce 
 marqueur — tu n'as rien d'autre à faire.
 C'est le SEUL moyen pour qu'une confirmation implicite ("oui" tout seul) 
-valide une donnée : le système ne réutilise plus jamais un ancien message 
-pour deviner ce qu'un "oui" confirme.
+valide une donnée : le système ne réutilise jamais un ancien message ni ta 
+propre réponse pour deviner ce qu'un "oui" confirme.
 
 RÈGLE DE SÉCURITÉ VOCALE (TRÈS IMPORTANT) :
 Certains messages du client sont précédés de "[MESSAGE VOCAL - transcription 
@@ -140,8 +143,6 @@ Une seule fois par commande.
 TON : Chaleureux, direct, mélange naturel français/wolof simple ("Waaw", "am nañu ko", "jërejëf"). Réponses courtes, 2-3 phrases max.`;
 }
 
-// Retire les accents/diacritiques pour des comparaisons plus tolérantes
-// (ex: "sacre coeur" doit matcher "Sacré-Cœur").
 function normalizeText(value) {
   return String(value || '')
     .normalize('NFD')
@@ -151,6 +152,15 @@ function normalizeText(value) {
     .replace(/[-/]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+// Un produit "matche" le message du client si au moins un mot significatif
+// (3 lettres ou plus) de son nom apparaît dans le texte — permet à "mocassin"
+// ou "yaram" de matcher, sans exiger que le client récite le nom complet du
+// catalogue mot pour mot.
+function productMatchesText(product, normalizedText) {
+  const nameWords = normalizeText(product.name).split(' ').filter(w => w.length >= 3);
+  return nameWords.some(w => normalizedText.includes(w));
 }
 
 function findDeliveryZone(deliveryZones, zoneName) {
@@ -387,8 +397,6 @@ function isShortAffirmative(rawText) {
 
 const FIELD_MAP = { produit: 'product', taille: 'size', couleur: 'color', zone: 'deliveryZone' };
 
-// Wrapper simple pour éviter qu'un appel externe bloqué ne fasse traîner
-// indéfiniment le webhook (timeout par défaut : 20 secondes).
 async function fetchWithTimeout(url, options = {}, timeoutMs = 20000) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -599,9 +607,6 @@ export default async function handler(req, res) {
         .trim();
 
       if (finalClientText) {
-        // Pour un message vocal, on envoie la réponse vocale en premier
-        // (plus naturel pour un client qui a lui-même parlé), puis le texte
-        // comme référence écrite.
         if (wasVoiceMessage) {
           await generateAndSendVoiceReply(phoneNumberId, from, finalClientText);
         }
@@ -624,7 +629,7 @@ export default async function handler(req, res) {
 
       const currentText = currentClientTextLower(text);
 
-      let mentionedProduct = merchant.products.find(p => currentText.includes(normalizeText(p.name)));
+      let mentionedProduct = merchant.products.find(p => productMatchesText(p, currentText));
 
       if (mentionedProduct) {
         const isNewProduct = state.product.value && state.product.value !== mentionedProduct.name;
