@@ -17,9 +17,16 @@ const redis = new Redis({
 
 const STATE_TTL_SECONDS = 60 * 60 * 24 * 3;   // 3 jours d'inactivité = expiration
 const DONE_TTL_SECONDS = 60 * 60 * 24;        // 24h pour la protection anti-doublon
-const LOCK_TTL_SECONDS = 25;                  // doit couvrir transcription + GPT + envoi
+const LOCK_TTL_SECONDS = 45;                  // doit couvrir transcription + GPT + envoi photo
+// Tentatives courtes seulement (~4 secondes au total) : au-delà, on ne bloque
+// plus le webhook à attendre — le message est mis en file d'attente (voir
+// PENDING_QUEUE plus bas) et sera traité par celui qui détient déjà le
+// verrou, juste avant qu'il ne le relâche. Ça évite à la fois de perdre un
+// message ET de garder une invocation Vercel ouverte trop longtemps à ne
+// rien faire d'autre qu'attendre.
 const LOCK_MAX_RETRIES = 6;
-const LOCK_RETRY_DELAY_MS = 300;
+const LOCK_RETRY_DELAY_MS = 700;
+const QUEUE_TTL_SECONDS = 60 * 10; // 10 min : au-delà, un message en attente est abandonné
 
 // ---------------------------------------------------------------------------
 // VERROU PAR CONVERSATION — avec token de propriétaire, libération conditionnelle
@@ -45,16 +52,16 @@ async function acquireLock(conversationKey) {
   const lockKey = `lock:${conversationKey}`;
   const token = crypto.randomUUID();
 
+  console.log(`DEBUG - LOCK TRY ${conversationKey}`);
   for (let attempt = 0; attempt < LOCK_MAX_RETRIES; attempt++) {
     const acquired = await redis.set(lockKey, token, { nx: true, ex: LOCK_TTL_SECONDS });
-    if (acquired) return token;
+    if (acquired) {
+      console.log(`DEBUG - LOCK ACQUIRED ${conversationKey} (tentative ${attempt + 1})`);
+      return token;
+    }
     await sleep(LOCK_RETRY_DELAY_MS);
   }
-  // Après plusieurs tentatives, on abandonne le verrou plutôt que de bloquer
-  // indéfiniment le client. Pour 2 commerçants pilotes, ce cas doit rester
-  // rare — si les logs montrent que ça arrive souvent, il faut soit
-  // augmenter LOCK_TTL_SECONDS, soit investiguer un traitement trop lent.
-  console.error(`DEBUG - Impossible d'acquérir le verrou pour ${conversationKey} après ${LOCK_MAX_RETRIES} tentatives`);
+  console.log(`DEBUG - LOCK BUSY ${conversationKey} après ${LOCK_MAX_RETRIES} tentatives — mise en file`);
   return null;
 }
 
@@ -63,9 +70,34 @@ async function releaseLock(conversationKey, token) {
   const lockKey = `lock:${conversationKey}`;
   try {
     await redis.eval(UNLOCK_SCRIPT, [lockKey], [token]);
+    console.log(`DEBUG - LOCK RELEASED ${conversationKey}`);
   } catch (err) {
     console.error('DEBUG - Erreur libération du verrou:', err);
   }
+}
+
+// ---------------------------------------------------------------------------
+// FILE D'ATTENTE PAR CONVERSATION — pour ne jamais perdre un message
+// ---------------------------------------------------------------------------
+// Si le verrou est occupé, on ne renonce plus au message : on le pousse dans
+// une liste Redis dédiée à cette conversation. Celui qui détient actuellement
+// le verrou la videra (dans l'ordre d'arrivée) juste avant de le relâcher.
+// Important : WhatsApp considère un message comme livré dès qu'on répond 200
+// à son webhook — un message qu'on abandonnerait ici serait donc perdu pour
+// de bon, pas juste "en attente" côté Meta. D'où l'importance de ne jamais
+// répondre 200 sans avoir soit traité, soit mis en file le message.
+
+function queueKey(conversationKey) {
+  return `pending:${conversationKey}`;
+}
+
+async function pushPendingMessage(conversationKey, item) {
+  await redis.rpush(queueKey(conversationKey), item);
+  await redis.expire(queueKey(conversationKey), QUEUE_TTL_SECONDS);
+}
+
+async function popPendingMessage(conversationKey) {
+  return await redis.lpop(queueKey(conversationKey));
 }
 
 // ---------------------------------------------------------------------------
@@ -1027,33 +1059,60 @@ export default async function handler(req, res) {
 
       const conversationKey = `${phoneNumberId}_${from}`;
 
-      // --- Verrou par conversation ---
+      // --- Verrou par conversation (tentatives courtes) ---
       const lockToken = await acquireLock(conversationKey);
+
       if (!lockToken) {
-        // Verrou non obtenu après plusieurs tentatives : on préfère répondre
-        // brièvement plutôt que de laisser le client sans réponse.
-        await sendWhatsAppText(phoneNumberId, from, "Un instant, je termine de traiter votre message précédent... 🙏");
+        // Le verrou est occupé après quelques tentatives courtes : on ne
+        // renonce PAS au message (WhatsApp ne le renverra jamais si on
+        // répond 200 sans l'avoir traité). On le met en file, celui qui
+        // détient le verrou le traitera juste avant de le relâcher.
+        await pushPendingMessage(conversationKey, { messageId, from, text, wasVoiceMessage });
+        console.log(`DEBUG - QUEUE PUSH ${conversationKey} messageId=${messageId}`);
         return res.status(200).send('OK');
       }
 
       try {
-        // --- Idempotence : ce message précis a-t-il déjà été traité ? ---
-        // Vérifié APRÈS acquisition du verrou : si un doublon WhatsApp arrive
-        // pendant qu'on traite l'original, il attend le verrou puis voit
-        // "déjà traité" une fois qu'il l'obtient.
-        if (await isMessageAlreadyProcessed(messageId)) {
+        // --- Traiter d'abord le message qui a déclenché cette invocation ---
+        if (!(await isMessageAlreadyProcessed(messageId))) {
+          const state = await loadState(conversationKey);
+          const history = await loadHistory(conversationKey);
+
+          await processMessage({ merchant, phoneNumberId, from, text, wasVoiceMessage, state, history });
+
+          await saveState(conversationKey, state);
+          await saveHistory(conversationKey, history);
+          await markMessageProcessed(messageId);
+        } else {
           console.log('DEBUG - Message déjà traité, ignoré:', messageId);
-          return res.status(200).send('OK');
         }
 
-        const state = await loadState(conversationKey);
-        const history = await loadHistory(conversationKey);
+        // --- Vider la file de cette conversation avant de relâcher le verrou ---
+        // Traite dans l'ordre d'arrivée tout message qu'un autre appel aurait
+        // mis en attente pendant qu'on était occupé.
+        let queuedItem = await popPendingMessage(conversationKey);
+        while (queuedItem) {
+          console.log(`DEBUG - QUEUE DRAIN ${conversationKey} messageId=${queuedItem.messageId}`);
+          if (!(await isMessageAlreadyProcessed(queuedItem.messageId))) {
+            const qState = await loadState(conversationKey);
+            const qHistory = await loadHistory(conversationKey);
 
-        await processMessage({ merchant, phoneNumberId, from, text, wasVoiceMessage, state, history });
+            await processMessage({
+              merchant,
+              phoneNumberId,
+              from: queuedItem.from,
+              text: queuedItem.text,
+              wasVoiceMessage: queuedItem.wasVoiceMessage,
+              state: qState,
+              history: qHistory,
+            });
 
-        await saveState(conversationKey, state);
-        await saveHistory(conversationKey, history);
-        await markMessageProcessed(messageId);
+            await saveState(conversationKey, qState);
+            await saveHistory(conversationKey, qHistory);
+            await markMessageProcessed(queuedItem.messageId);
+          }
+          queuedItem = await popPendingMessage(conversationKey);
+        }
       } finally {
         await releaseLock(conversationKey, lockToken);
       }
