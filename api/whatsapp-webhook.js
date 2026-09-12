@@ -1,5 +1,6 @@
 // api/whatsapp-webhook.js
 import { Redis } from '@upstash/redis';
+import { waitUntil } from '@vercel/functions';
 import crypto from 'crypto';
 
 // ---------------------------------------------------------------------------
@@ -17,16 +18,14 @@ const redis = new Redis({
 
 const STATE_TTL_SECONDS = 60 * 60 * 24 * 3;   // 3 jours d'inactivité = expiration
 const DONE_TTL_SECONDS = 60 * 60 * 24;        // 24h pour la protection anti-doublon
-const LOCK_TTL_SECONDS = 45;                  // doit couvrir transcription + GPT + envoi photo
-// Tentatives courtes seulement (~4 secondes au total) : au-delà, on ne bloque
-// plus le webhook à attendre — le message est mis en file d'attente (voir
-// PENDING_QUEUE plus bas) et sera traité par celui qui détient déjà le
-// verrou, juste avant qu'il ne le relâche. Ça évite à la fois de perdre un
-// message ET de garder une invocation Vercel ouverte trop longtemps à ne
-// rien faire d'autre qu'attendre.
+// 120s : le fichier compte 10 appels externes chronométrés (timeout 20s
+// chacun) — un message vocal avec photo peut chaîner transcription + GPT +
+// TTS + upload + envoi + photo + notification. 45s n'était pas une garantie
+// suffisante contre ce pire cas réaliste.
+const LOCK_TTL_SECONDS = 180;
 const LOCK_MAX_RETRIES = 6;
 const LOCK_RETRY_DELAY_MS = 700;
-const QUEUE_TTL_SECONDS = 60 * 10; // 10 min : au-delà, un message en attente est abandonné
+const QUEUE_TTL_SECONDS = 60 * 60; // 1h — juste une protection contre les vieux messages, pas une file volontairement courte
 
 // ---------------------------------------------------------------------------
 // VERROU PAR CONVERSATION — avec token de propriétaire, libération conditionnelle
@@ -93,6 +92,16 @@ function queueKey(conversationKey) {
 
 async function pushPendingMessage(conversationKey, item) {
   await redis.rpush(queueKey(conversationKey), item);
+  await redis.expire(queueKey(conversationKey), QUEUE_TTL_SECONDS);
+}
+
+// Remet un message en tête de file — utilisé quand son traitement a échoué,
+// pour qu'il soit retenté (par un futur drain) plutôt que perdu. Il a été
+// retiré par LPOP avant son traitement ; sans ce filet, un échec en cours de
+// route le ferait disparaître pour de bon (voir le commentaire au point
+// d'appel).
+async function requeueFront(conversationKey, item) {
+  await redis.lpush(queueKey(conversationKey), item);
   await redis.expire(queueKey(conversationKey), QUEUE_TTL_SECONDS);
 }
 
@@ -673,11 +682,16 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 20000) {
 }
 
 async function sendWhatsAppText(phoneNumberId, to, body) {
-  await fetchWithTimeout(`https://graph.facebook.com/v21.0/${phoneNumberId}/messages`, {
+  const response = await fetchWithTimeout(`https://graph.facebook.com/v21.0/${phoneNumberId}/messages`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}` },
     body: JSON.stringify({ messaging_product: 'whatsapp', to, text: { body } }),
   });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Échec envoi texte WhatsApp ${response.status}: ${errorText}`);
+  }
+  return response;
 }
 
 async function sendWhatsAppImage(phoneNumberId, to, imageUrl, caption) {
@@ -688,6 +702,10 @@ async function sendWhatsAppImage(phoneNumberId, to, imageUrl, caption) {
   });
   const data = await response.json();
   console.log('DEBUG - Envoi image:', imageUrl, JSON.stringify(data));
+  if (!response.ok) {
+    throw new Error(`Échec envoi image WhatsApp ${response.status}: ${JSON.stringify(data)}`);
+  }
+  return data;
 }
 
 async function transcribeWhatsAppAudio(mediaId) {
@@ -1015,66 +1033,78 @@ async function processMessage({ merchant, phoneNumberId, from, text, wasVoiceMes
 // ---------------------------------------------------------------------------
 // HANDLER
 // ---------------------------------------------------------------------------
-export default async function handler(req, res) {
-  if (req.method === 'GET') {
-    const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN;
-    if (req.query['hub.mode'] === 'subscribe' && req.query['hub.verify_token'] === VERIFY_TOKEN) {
-      return res.status(200).send(req.query['hub.challenge']);
+// ---------------------------------------------------------------------------
+// TRAITEMENT COMPLET D'UN WEBHOOK ENTRANT — exécuté en arrière-plan via
+// waitUntil(), APRÈS que la réponse 200 a déjà été envoyée à Meta.
+// ---------------------------------------------------------------------------
+// Pourquoi : plusieurs guides d'intégration WhatsApp Cloud API rapportent que
+// Meta attend un accusé de réception (HTTP 200) en quelques secondes — passé
+// ce délai, la livraison est considérée en échec et remise en file de retry,
+// MÊME si notre serveur finit par répondre 200 un peu plus tard. Le pipeline
+// de NOXA (transcription + GPT + TTS + envoi photo + notification) peut
+// dépasser ce délai. On accuse donc réception immédiatement dans le handler,
+// et tout le vrai traitement se fait ici, après coup.
+// Conséquence assumée : Meta ne renverra plus jamais un message pour nous en
+// cas d'erreur de notre côté (puisqu'on a déjà répondu 200) — c'est pour ça
+// que l'idempotence et la file d'attente ci-dessus deviennent le SEUL filet
+// de sécurité, pas un confort en plus du retry de Meta.
+async function handleIncomingMessage(body) {
+  try {
+    const change = body.entry?.[0]?.changes?.[0];
+    const message = change?.value?.messages?.[0];
+    const phoneNumberId = change?.value?.metadata?.phone_number_id;
+
+    if (!message) return;
+    const from = message.from;
+    const messageId = message.id;
+    const startedAt = Date.now();
+
+    if (['image', 'sticker', 'location', 'document'].includes(message.type)) {
+      await sendWhatsAppText(phoneNumberId, from, "Je ne peux pas encore traiter ce type de message. Dites-moi en quelques mots ce qui vous intéresse ! 😊");
+      return;
     }
-    return res.status(403).send('Verification failed');
-  }
 
-  if (req.method === 'POST') {
+    let text = message.text?.body;
+    let wasVoiceMessage = false;
+
+    if (message.type === 'audio' && message.audio?.id) {
+      text = await transcribeWhatsAppAudio(message.audio.id);
+      if (!text) {
+        await sendWhatsAppText(phoneNumberId, from, "Je n'ai pas bien compris votre message vocal, pouvez-vous réessayer ou l'écrire en texte ?");
+        return;
+      }
+      wasVoiceMessage = true;
+      text = `[MESSAGE VOCAL - transcription potentiellement imparfaite] ${text}`;
+    }
+    if (!text) return;
+
+    const merchant = MERCHANTS[phoneNumberId];
+    if (!merchant) return;
+
+    const conversationKey = `${phoneNumberId}_${from}`;
+
+    console.log('DEBUG - PROCESS START', { messageId, conversationKey, type: wasVoiceMessage ? 'voice' : 'text' });
+
+    // --- Verrou par conversation (tentatives courtes) ---
+    const lockToken = await acquireLock(conversationKey);
+
+    if (!lockToken) {
+      // Le verrou est occupé après quelques tentatives courtes : on ne
+      // renonce PAS au message — on le met en file, celui qui détient le
+      // verrou le traitera juste avant de le relâcher.
+      await pushPendingMessage(conversationKey, { messageId, from, text, wasVoiceMessage });
+      console.log(`DEBUG - QUEUE PUSH ${conversationKey} messageId=${messageId}`);
+      return;
+    }
+
     try {
-      const body = req.body;
-      const change = body.entry?.[0]?.changes?.[0];
-      const message = change?.value?.messages?.[0];
-      const phoneNumberId = change?.value?.metadata?.phone_number_id;
-
-      if (!message) return res.status(200).send('OK');
-      const from = message.from;
-      const messageId = message.id;
-
-      if (['image', 'sticker', 'location', 'document'].includes(message.type)) {
-        await sendWhatsAppText(phoneNumberId, from, "Je ne peux pas encore traiter ce type de message. Dites-moi en quelques mots ce qui vous intéresse ! 😊");
-        return res.status(200).send('OK');
-      }
-
-      let text = message.text?.body;
-      let wasVoiceMessage = false;
-
-      if (message.type === 'audio' && message.audio?.id) {
-        text = await transcribeWhatsAppAudio(message.audio.id);
-        if (!text) {
-          await sendWhatsAppText(phoneNumberId, from, "Je n'ai pas bien compris votre message vocal, pouvez-vous réessayer ou l'écrire en texte ?");
-          return res.status(200).send('OK');
-        }
-        wasVoiceMessage = true;
-        text = `[MESSAGE VOCAL - transcription potentiellement imparfaite] ${text}`;
-      }
-      if (!text) return res.status(200).send('OK');
-
-      const merchant = MERCHANTS[phoneNumberId];
-      if (!merchant) return res.status(200).send('OK');
-
-      const conversationKey = `${phoneNumberId}_${from}`;
-
-      // --- Verrou par conversation (tentatives courtes) ---
-      const lockToken = await acquireLock(conversationKey);
-
-      if (!lockToken) {
-        // Le verrou est occupé après quelques tentatives courtes : on ne
-        // renonce PAS au message (WhatsApp ne le renverra jamais si on
-        // répond 200 sans l'avoir traité). On le met en file, celui qui
-        // détient le verrou le traitera juste avant de le relâcher.
-        await pushPendingMessage(conversationKey, { messageId, from, text, wasVoiceMessage });
-        console.log(`DEBUG - QUEUE PUSH ${conversationKey} messageId=${messageId}`);
-        return res.status(200).send('OK');
-      }
-
-      try {
-        // --- Traiter d'abord le message qui a déclenché cette invocation ---
-        if (!(await isMessageAlreadyProcessed(messageId))) {
+      // --- Traiter d'abord le message qui a déclenché cette invocation ---
+      // Même filet que pour un message de file : si le traitement échoue en
+      // cours de route, on ne le laisse pas disparaître silencieusement — on
+      // le remet en tête de file pour qu'un futur message de cette
+      // conversation le retente, exactement comme pour QUEUE DRAIN ci-dessous.
+      if (!(await isMessageAlreadyProcessed(messageId))) {
+        try {
           const state = await loadState(conversationKey);
           const history = await loadHistory(conversationKey);
 
@@ -1083,17 +1113,27 @@ export default async function handler(req, res) {
           await saveState(conversationKey, state);
           await saveHistory(conversationKey, history);
           await markMessageProcessed(messageId);
-        } else {
-          console.log('DEBUG - Message déjà traité, ignoré:', messageId);
+        } catch (initialError) {
+          console.error(`DEBUG - Échec traitement message initial ${messageId}, remis en attente:`, initialError);
+          await requeueFront(conversationKey, { messageId, from, text, wasVoiceMessage });
         }
+      } else {
+        console.log('DEBUG - Message déjà traité, ignoré:', messageId);
+      }
 
-        // --- Vider la file de cette conversation avant de relâcher le verrou ---
-        // Traite dans l'ordre d'arrivée tout message qu'un autre appel aurait
-        // mis en attente pendant qu'on était occupé.
-        let queuedItem = await popPendingMessage(conversationKey);
-        while (queuedItem) {
-          console.log(`DEBUG - QUEUE DRAIN ${conversationKey} messageId=${queuedItem.messageId}`);
-          if (!(await isMessageAlreadyProcessed(queuedItem.messageId))) {
+      // --- Vider la file de cette conversation avant de relâcher le verrou ---
+      // Traite dans l'ordre d'arrivée tout message qu'un autre appel aurait
+      // mis en attente pendant qu'on était occupé.
+      // Important : LPOP retire immédiatement l'élément de Redis. Si le
+      // traitement échoue APRÈS ce retrait, le message serait perdu pour de
+      // bon (Meta a déjà reçu son 200, il ne le renverra pas) — donc en cas
+      // d'échec, on le remet en tête de file avant d'arrêter le drain, pour
+      // qu'un futur message de cette conversation le retente.
+      let queuedItem = await popPendingMessage(conversationKey);
+      while (queuedItem) {
+        console.log(`DEBUG - QUEUE DRAIN ${conversationKey} messageId=${queuedItem.messageId}`);
+        if (!(await isMessageAlreadyProcessed(queuedItem.messageId))) {
+          try {
             const qState = await loadState(conversationKey);
             const qHistory = await loadHistory(conversationKey);
 
@@ -1110,18 +1150,44 @@ export default async function handler(req, res) {
             await saveState(conversationKey, qState);
             await saveHistory(conversationKey, qHistory);
             await markMessageProcessed(queuedItem.messageId);
+          } catch (queueError) {
+            console.error(`DEBUG - Échec traitement message en file ${queuedItem.messageId}, remis en attente:`, queueError);
+            await requeueFront(conversationKey, queuedItem);
+            break;
           }
-          queuedItem = await popPendingMessage(conversationKey);
         }
-      } finally {
-        await releaseLock(conversationKey, lockToken);
+        queuedItem = await popPendingMessage(conversationKey);
       }
-
-      return res.status(200).send('OK');
-    } catch (error) {
-      console.error('Erreur webhook:', error);
-      return res.status(200).send('OK');
+    } finally {
+      await releaseLock(conversationKey, lockToken);
     }
+
+    console.log('DEBUG - PROCESS END', { messageId, conversationKey, durationMs: Date.now() - startedAt });
+  } catch (error) {
+    // Puisque Meta a déjà reçu son 200, cette erreur ne déclenchera AUCUN
+    // retry de sa part — ce log est la seule trace qui restera de l'échec.
+    // À surveiller manuellement (ou via une alerte) pendant le pilote.
+    console.error('DEBUG - Erreur traitement arrière-plan:', error);
+  }
+}
+
+export default async function handler(req, res) {
+  if (req.method === 'GET') {
+    const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN;
+    if (req.query['hub.mode'] === 'subscribe' && req.query['hub.verify_token'] === VERIFY_TOKEN) {
+      return res.status(200).send(req.query['hub.challenge']);
+    }
+    return res.status(403).send('Verification failed');
+  }
+
+  if (req.method === 'POST') {
+    // Accusé de réception IMMÉDIAT, avant tout traitement — voir le
+    // commentaire au-dessus de handleIncomingMessage pour la raison. Le
+    // vrai traitement continue en arrière-plan via waitUntil, qui garde
+    // l'invocation Vercel active au-delà de la réponse HTTP (permis par
+    // Fluid Compute, jusqu'à la durée max configurée pour la fonction).
+    waitUntil(handleIncomingMessage(req.body));
+    return res.status(200).send('OK');
   }
 
   return res.status(405).send('Method Not Allowed');
