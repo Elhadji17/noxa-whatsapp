@@ -805,7 +805,7 @@ async function generateAndSendVoiceReply(phoneNumberId, to, text) {
 // qu'elle s'exécute proprement à l'intérieur du bloc verrouillé, avec un seul
 // point de sauvegarde en sortie (succès ou échec).
 // ---------------------------------------------------------------------------
-async function processMessage({ merchant, phoneNumberId, from, text, wasVoiceMessage, state, history }) {
+async function processMessage({ merchant, phoneNumberId, from, text, wasVoiceMessage, state, history, messageId }) {
   if (state.pendingProposals) {
     if (isShortAffirmative(text)) {
       for (const [field, value] of Object.entries(state.pendingProposals)) {
@@ -943,6 +943,7 @@ async function processMessage({ merchant, phoneNumberId, from, text, wasVoiceMes
       await generateAndSendVoiceReply(phoneNumberId, from, finalClientText);
     }
     await sendWhatsAppText(phoneNumberId, from, finalClientText);
+    console.log('DEBUG - OUTBOUND TEXT', { messageId, text: finalClientText });
   }
 
   if (propositionMatch) {
@@ -976,6 +977,7 @@ async function processMessage({ merchant, phoneNumberId, from, text, wasVoiceMes
             phoneNumberId, from, variant.imageUrl,
             `${mentionedProduct.name} (${variant.label || variant.color}) — ${mentionedProduct.price}`
           );
+          console.log('DEBUG - OUTBOUND IMAGE', { messageId, imageUrl: variant.imageUrl });
         }
       } else if (instruction && instruction.startsWith('couleur=')) {
         const colorName = instruction.replace('couleur=', '').trim();
@@ -987,10 +989,12 @@ async function processMessage({ merchant, phoneNumberId, from, text, wasVoiceMes
             phoneNumberId, from, matchedColor.imageUrl,
             `${mentionedProduct.name} (${matchedColor.label || matchedColor.color}) — ${mentionedProduct.price}`
           );
+          console.log('DEBUG - OUTBOUND IMAGE', { messageId, imageUrl: matchedColor.imageUrl });
         }
       }
     } else {
       await sendWhatsAppImage(phoneNumberId, from, mentionedProduct.imageUrl, `${mentionedProduct.name} — ${mentionedProduct.price}`);
+      console.log('DEBUG - OUTBOUND IMAGE', { messageId, imageUrl: mentionedProduct.imageUrl });
     }
   }
 
@@ -1000,7 +1004,11 @@ async function processMessage({ merchant, phoneNumberId, from, text, wasVoiceMes
     } else {
       console.log('DEBUG - STATE AVANT VALIDATION:', JSON.stringify(state));
       const validation = validateOrder(state, merchant);
-      console.log('DEBUG - VALIDATION RESULT:', JSON.stringify(validation));
+      console.log('DEBUG - ORDER VALIDATION', {
+        messageId,
+        valid: validation.valid,
+        order: validation.valid ? validation.orderDetails : validation.errors,
+      });
 
       if (validation.valid) {
         const d = validation.orderDetails;
@@ -1013,6 +1021,7 @@ async function processMessage({ merchant, phoneNumberId, from, text, wasVoiceMes
             text: { body: `🛍️ Nouvelle commande !\nProduit: ${d.product}\nTaille: ${d.size || 'aucune'}\nCouleur: ${d.color || 'aucune'}\nZone: ${d.zone}\nTotal: ${d.total} FCFA\nClient: ${from}\n\nVérifiez votre app Wave pour confirmer la réception du paiement avant de valider.` },
           }),
         });
+        console.log('DEBUG - MERCHANT NOTIFICATION', { messageId, sent: notifResponse.ok, order: d });
         if (notifResponse.ok) {
           state.orderSent = true;
         } else {
@@ -1028,6 +1037,8 @@ async function processMessage({ merchant, phoneNumberId, from, text, wasVoiceMes
       }
     }
   }
+
+  console.log('DEBUG - STATE AFTER', { messageId, state });
 }
 
 // ---------------------------------------------------------------------------
@@ -1108,11 +1119,12 @@ async function handleIncomingMessage(body) {
           const state = await loadState(conversationKey);
           const history = await loadHistory(conversationKey);
 
-          await processMessage({ merchant, phoneNumberId, from, text, wasVoiceMessage, state, history });
+          await processMessage({ merchant, phoneNumberId, from, text, wasVoiceMessage, state, history, messageId });
 
           await saveState(conversationKey, state);
           await saveHistory(conversationKey, history);
           await markMessageProcessed(messageId);
+          console.log('DEBUG - DONE', { messageId });
         } catch (initialError) {
           console.error(`DEBUG - Échec traitement message initial ${messageId}, remis en attente:`, initialError);
           await requeueFront(conversationKey, { messageId, from, text, wasVoiceMessage });
@@ -1145,11 +1157,13 @@ async function handleIncomingMessage(body) {
               wasVoiceMessage: queuedItem.wasVoiceMessage,
               state: qState,
               history: qHistory,
+              messageId: queuedItem.messageId,
             });
 
             await saveState(conversationKey, qState);
             await saveHistory(conversationKey, qHistory);
             await markMessageProcessed(queuedItem.messageId);
+            console.log('DEBUG - DONE', { messageId: queuedItem.messageId });
           } catch (queueError) {
             console.error(`DEBUG - Échec traitement message en file ${queuedItem.messageId}, remis en attente:`, queueError);
             await requeueFront(conversationKey, queuedItem);
