@@ -1,4 +1,135 @@
 // api/whatsapp-webhook.js
+import { Redis } from '@upstash/redis';
+import crypto from 'crypto';
+
+// ---------------------------------------------------------------------------
+// REDIS — connexion
+// ---------------------------------------------------------------------------
+// Redis.fromEnv() lit UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN.
+// Si ton intégration Vercel a injecté KV_REST_API_URL / KV_REST_API_TOKEN
+// (nom historique conservé pour compatibilité), on les mappe explicitement —
+// vérifie dans ton dashboard Vercel > Storage > (ta base) > .env.local
+// quelles variables sont réellement présentes, et ajuste si besoin.
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN,
+});
+
+const STATE_TTL_SECONDS = 60 * 60 * 24 * 3;   // 3 jours d'inactivité = expiration
+const DONE_TTL_SECONDS = 60 * 60 * 24;        // 24h pour la protection anti-doublon
+const LOCK_TTL_SECONDS = 25;                  // doit couvrir transcription + GPT + envoi
+const LOCK_MAX_RETRIES = 6;
+const LOCK_RETRY_DELAY_MS = 300;
+
+// ---------------------------------------------------------------------------
+// VERROU PAR CONVERSATION — avec token de propriétaire, libération conditionnelle
+// ---------------------------------------------------------------------------
+// Empêche deux messages rapprochés de la même conversation de se marcher
+// dessus (lire le même état avant que l'autre ait sauvegardé le sien).
+// Le token empêche qu'une requête en retard supprime le verrou d'une autre
+// requête qui l'a légitimement acquis après expiration du sien.
+
+const UNLOCK_SCRIPT = `
+if redis.call("get", KEYS[1]) == ARGV[1] then
+  return redis.call("del", KEYS[1])
+else
+  return 0
+end
+`;
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function acquireLock(conversationKey) {
+  const lockKey = `lock:${conversationKey}`;
+  const token = crypto.randomUUID();
+
+  for (let attempt = 0; attempt < LOCK_MAX_RETRIES; attempt++) {
+    const acquired = await redis.set(lockKey, token, { nx: true, ex: LOCK_TTL_SECONDS });
+    if (acquired) return token;
+    await sleep(LOCK_RETRY_DELAY_MS);
+  }
+  // Après plusieurs tentatives, on abandonne le verrou plutôt que de bloquer
+  // indéfiniment le client. Pour 2 commerçants pilotes, ce cas doit rester
+  // rare — si les logs montrent que ça arrive souvent, il faut soit
+  // augmenter LOCK_TTL_SECONDS, soit investiguer un traitement trop lent.
+  console.error(`DEBUG - Impossible d'acquérir le verrou pour ${conversationKey} après ${LOCK_MAX_RETRIES} tentatives`);
+  return null;
+}
+
+async function releaseLock(conversationKey, token) {
+  if (!token) return;
+  const lockKey = `lock:${conversationKey}`;
+  try {
+    await redis.eval(UNLOCK_SCRIPT, [lockKey], [token]);
+  } catch (err) {
+    console.error('DEBUG - Erreur libération du verrou:', err);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// IDEMPOTENCE — un message WhatsApp donné n'est traité qu'une fois
+// ---------------------------------------------------------------------------
+// On marque un message comme "done" seulement APRÈS un traitement complet
+// réussi (réponse envoyée + commande éventuellement transmise), jamais avant.
+// Si le traitement plante en cours de route, le message n'est pas marqué
+// "done" : un retry WhatsApp le retraitera. C'est volontaire — mieux vaut
+// une réponse en double (gênant) qu'un message ou une commande perdue
+// (grave). Le verrou de conversation limite le risque de double-traitement
+// simultané pour ce même message.
+
+async function isMessageAlreadyProcessed(messageId) {
+  if (!messageId) return false;
+  const done = await redis.get(`done:${messageId}`);
+  return Boolean(done);
+}
+
+async function markMessageProcessed(messageId) {
+  if (!messageId) return;
+  await redis.set(`done:${messageId}`, '1', { ex: DONE_TTL_SECONDS });
+}
+
+// ---------------------------------------------------------------------------
+// STATE & HISTORY — chargement/sauvegarde
+// ---------------------------------------------------------------------------
+
+function emptyField() {
+  return { value: null, source: null, confirmed: false };
+}
+
+function emptyState() {
+  return {
+    product: emptyField(),
+    size: emptyField(),
+    color: emptyField(),
+    deliveryZone: emptyField(),
+    orderSent: false,
+    pendingProposals: null,
+  };
+}
+
+async function loadState(conversationKey) {
+  const stored = await redis.get(`state:${conversationKey}`);
+  return stored || emptyState();
+}
+
+async function saveState(conversationKey, state) {
+  await redis.set(`state:${conversationKey}`, state, { ex: STATE_TTL_SECONDS });
+}
+
+async function loadHistory(conversationKey) {
+  const stored = await redis.get(`history:${conversationKey}`);
+  return stored || [];
+}
+
+async function saveHistory(conversationKey, history) {
+  await redis.set(`history:${conversationKey}`, history.slice(-10), { ex: STATE_TTL_SECONDS });
+}
+
+// ---------------------------------------------------------------------------
+// PROMPT / CATALOGUE (inchangé)
+// ---------------------------------------------------------------------------
 
 function buildProductListText(products) {
   return products.map(p => {
@@ -174,16 +305,91 @@ function normalizeText(value) {
     .trim();
 }
 
-// Un produit "matche" le message du client si au moins un mot significatif
-// (3 lettres ou plus) de son nom apparaît dans le texte — permet à "mocassin"
-// ou "yaram" de matcher, sans exiger que le client récite le nom complet du
-// catalogue mot pour mot.
-function productMatchesText(product, normalizedText) {
+function productWordSet(product) {
   const nameWords = normalizeText(product.name).split(' ').filter(w => w.length >= 3);
   const aliasWords = (product.aliases || []).flatMap(a =>
     normalizeText(a).split(' ').filter(w => w.length >= 3)
   );
-  return [...nameWords, ...aliasWords].some(w => normalizedText.includes(w));
+  return [...new Set([...nameWords, ...aliasWords])];
+}
+
+// Détermine, à partir du catalogue réel du commerçant, quels mots sont
+// "partagés" entre plusieurs produits (ex: "cuir", "chaussure") — ceux-là ne
+// peuvent jamais suffire seuls à identifier un produit. Un mot qui n'apparaît
+// que dans un seul produit du catalogue (ex: "sandale" s'il n'y en a qu'une)
+// est au contraire pleinement distinctif. Calculé dynamiquement plutôt
+// qu'avec une liste codée en dur, pour rester correct quel que soit le
+// catalogue d'un commerçant donné.
+function buildProductWordIndex(products) {
+  const perProduct = products.map(p => ({ product: p, words: productWordSet(p) }));
+  const wordProductCount = new Map();
+  for (const { words } of perProduct) {
+    for (const w of new Set(words)) {
+      wordProductCount.set(w, (wordProductCount.get(w) || 0) + 1);
+    }
+  }
+  return { perProduct, wordProductCount };
+}
+
+function escapeRegExp(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// Vérifie qu'un mot du catalogue apparaît comme mot entier dans le texte
+// client, pas comme simple sous-chaîne. Sans ça, "dakar" matcherait à
+// l'intérieur de "ndakarou" (ils partagent ces lettres), créant une fausse
+// ambiguïté entre deux produits qui n'ont en réalité rien en commun.
+function containsWord(normalizedText, word) {
+  return new RegExp(`\\b${escapeRegExp(word)}\\b`).test(normalizedText);
+}
+
+// Calcule un score de correspondance entre un produit et le texte du client :
+// - un mot présent dans un seul produit du catalogue (distinctif) vaut 2 points
+// - un mot partagé par plusieurs produits vaut seulement 1 point d'appoint
+// Un produit dont SEULS des mots partagés matchent obtient un score de 0 —
+// un mot ambigu ne peut jamais, seul, désigner un produit.
+function productMatchScore(words, wordProductCount, normalizedText) {
+  let distinctiveHits = 0;
+  let sharedHits = 0;
+
+  for (const w of words) {
+    if (!containsWord(normalizedText, w)) continue;
+    if ((wordProductCount.get(w) || 1) > 1) {
+      sharedHits += 1;
+    } else {
+      distinctiveHits += 1;
+    }
+  }
+
+  if (distinctiveHits === 0) return 0;
+  return distinctiveHits * 2 + sharedHits;
+}
+
+// Trouve le produit le plus probable dans le texte du client.
+// - Si un seul produit a le meilleur score (> 0), il est retourné.
+// - Si plusieurs produits sont à égalité sur le meilleur score, on ne
+//   choisit PAS au hasard : on retourne un résultat "ambigu" pour que
+//   l'appelant demande une clarification plutôt que de deviner.
+function findMentionedProduct(products, normalizedText) {
+  const { perProduct, wordProductCount } = buildProductWordIndex(products);
+
+  let bestScore = 0;
+  let bestProducts = [];
+
+  for (const { product, words } of perProduct) {
+    const score = productMatchScore(words, wordProductCount, normalizedText);
+    if (score === 0) continue;
+    if (score > bestScore) {
+      bestScore = score;
+      bestProducts = [product];
+    } else if (score === bestScore) {
+      bestProducts.push(product);
+    }
+  }
+
+  if (bestProducts.length === 0) return { product: null, ambiguous: false };
+  if (bestProducts.length === 1) return { product: bestProducts[0], ambiguous: false };
+  return { product: null, ambiguous: true, candidates: bestProducts };
 }
 
 function findDeliveryZone(deliveryZones, zoneName) {
@@ -373,27 +579,6 @@ const MERCHANTS = {
 
 Object.values(MERCHANTS).forEach(m => { m.systemPrompt = buildSystemPrompt(m); });
 
-const conversationHistory = {};
-const conversationState = {};
-
-function emptyField() {
-  return { value: null, source: null, confirmed: false };
-}
-
-function getConversationState(conversationKey) {
-  if (!conversationState[conversationKey]) {
-    conversationState[conversationKey] = {
-      product: emptyField(),
-      size: emptyField(),
-      color: emptyField(),
-      deliveryZone: emptyField(),
-      orderSent: false,
-      pendingProposals: null,
-    };
-  }
-  return conversationState[conversationKey];
-}
-
 function setStateField(state, field, value, isVoice) {
   const current = state[field];
   const source = isVoice ? 'voice' : 'text';
@@ -411,10 +596,7 @@ function setStateField(state, field, value, isVoice) {
 }
 
 // Résume l'état réel de la commande pour GPT, à chaque tour, plutôt que de
-// compter sur GPT pour reconstruire ça seul depuis l'historique. C'est ce
-// qui manquait : GPT peut décrire un produit/couleur dans une phrase sans
-// jamais émettre [PROPOSITION], simplement parce que rien ne l'obligeait
-// explicitement à le faire à ce moment précis.
+// compter sur GPT pour reconstruire ça seul depuis l'historique.
 function buildStateContext(state) {
   const describeField = (field, label) => {
     const f = state[field];
@@ -568,6 +750,239 @@ async function generateAndSendVoiceReply(phoneNumberId, to, text) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// LOGIQUE DE TRAITEMENT D'UN MESSAGE — extraite dans sa propre fonction pour
+// qu'elle s'exécute proprement à l'intérieur du bloc verrouillé, avec un seul
+// point de sauvegarde en sortie (succès ou échec).
+// ---------------------------------------------------------------------------
+async function processMessage({ merchant, phoneNumberId, from, text, wasVoiceMessage, state, history }) {
+  if (state.pendingProposals) {
+    if (isShortAffirmative(text)) {
+      for (const [field, value] of Object.entries(state.pendingProposals)) {
+        setStateField(state, field, value, wasVoiceMessage);
+      }
+    }
+    state.pendingProposals = null;
+  }
+
+  const currentText = currentClientTextLower(text);
+
+  let mentionedProduct = null;
+  const productDetection = findMentionedProduct(merchant.products, currentText);
+
+  if (productDetection.ambiguous) {
+    // Deux produits (ou plus) matchent avec la même force — ne pas deviner.
+    // On redemande explicitement plutôt que de risquer le mauvais produit.
+    const names = productDetection.candidates.map(p => p.name).join(' ou ');
+    const clarification = `Vous parlez bien de : ${names} ? Précisez-moi lequel des deux 🙏`;
+    console.log('DEBUG - Produit ambigu, clarification demandée:', names);
+    history.push({ role: 'user', content: text });
+    history.push({ role: 'assistant', content: clarification });
+    await sendWhatsAppText(phoneNumberId, from, clarification);
+    return;
+  }
+
+  mentionedProduct = productDetection.product;
+
+  if (mentionedProduct) {
+    const isNewProduct = state.product.value && state.product.value !== mentionedProduct.name;
+    setStateField(state, 'product', mentionedProduct.name, wasVoiceMessage);
+    if (isNewProduct) {
+      state.size = emptyField();
+      state.color = emptyField();
+    }
+  } else if (state.product.value) {
+    mentionedProduct = merchant.products.find(p => p.name === state.product.value);
+  }
+
+  if (mentionedProduct && mentionedProduct.sizes) {
+    const sizeMatch = mentionedProduct.sizes.find(s => {
+      const regex = new RegExp(`\\b${s}\\b`);
+      return regex.test(currentText);
+    });
+    if (sizeMatch) {
+      setStateField(state, 'size', sizeMatch, wasVoiceMessage);
+    }
+  }
+
+  let detectedColor = null;
+  if (mentionedProduct) {
+    let allColors = [];
+    if (mentionedProduct.colorVariants) {
+      allColors = allColors.concat(mentionedProduct.colorVariants.map(c => ({
+        value: c.color, label: c.label || c.color,
+      })));
+    }
+    if (mentionedProduct.extraColors) {
+      allColors = allColors.concat(mentionedProduct.extraColors.map(c => ({ value: c, label: c })));
+    }
+    if (mentionedProduct.colors) {
+      allColors = allColors.concat(mentionedProduct.colors.map(c => ({ value: c, label: c })));
+    }
+
+    const found = allColors.find(c =>
+      currentText.includes(normalizeText(c.value)) || currentText.includes(normalizeText(c.label))
+    );
+    if (found) {
+      detectedColor = found.value;
+      setStateField(state, 'color', found.value, wasVoiceMessage);
+    }
+  }
+
+  if (merchant.deliveryZones) {
+    let foundZone = null;
+    for (const dz of merchant.deliveryZones) {
+      const match = dz.zones.find(z => currentText.includes(normalizeText(z)));
+      if (match) { foundZone = match; break; }
+    }
+    if (foundZone) {
+      setStateField(state, 'deliveryZone', foundZone, wasVoiceMessage);
+    }
+  }
+
+  console.log('DEBUG - currentText:', currentText, '| produit détecté:', mentionedProduct ? mentionedProduct.name : 'AUCUN');
+  console.log('DEBUG - STATE APRES DETECTION:', JSON.stringify(state));
+
+  history.push({ role: 'user', content: text });
+  const recentHistory = history.slice(-10);
+
+  const stateContext = buildStateContext(state);
+
+  let aiData;
+  try {
+    const aiResponse = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}` },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        messages: [
+          { role: 'system', content: merchant.systemPrompt },
+          { role: 'system', content: stateContext },
+          ...recentHistory,
+        ],
+      }),
+    });
+    if (!aiResponse.ok) {
+      console.error('DEBUG - Échec appel OpenAI, statut:', aiResponse.status, await aiResponse.text());
+      await sendWhatsAppText(phoneNumberId, from, "Petit souci technique de notre côté, on revient vers vous très vite !");
+      return;
+    }
+    aiData = await aiResponse.json();
+  } catch (err) {
+    console.error('Erreur appel OpenAI:', err);
+    await sendWhatsAppText(phoneNumberId, from, "Petit souci technique de notre côté, on revient vers vous très vite !");
+    return;
+  }
+
+  const replyText = aiData.choices?.[0]?.message?.content || "Désolé, je n'ai pas pu traiter votre message.";
+  console.log('DEBUG - GPT RAW:', replyText);
+  history.push({ role: 'assistant', content: replyText });
+
+  const photoMatch = replyText.match(/\[PHOTO:\s*(.+?)\]/);
+  const orderMatch = replyText.match(/\[COMMANDE:\s*(.+?)\]/);
+  const propositionMatch = replyText.match(/\[PROPOSITION:\s*(.+?)\]/);
+
+  const finalClientText = replyText
+    .replace(/\[PHOTO:.+?\]/, '')
+    .replace(/\[COMMANDE:.+?\]/, '')
+    .replace(/\[PROPOSITION:.+?\]/, '')
+    .trim();
+
+  if (finalClientText) {
+    if (wasVoiceMessage) {
+      await generateAndSendVoiceReply(phoneNumberId, from, finalClientText);
+    }
+    await sendWhatsAppText(phoneNumberId, from, finalClientText);
+  }
+
+  if (propositionMatch) {
+    const pending = {};
+    propositionMatch[1].split(';').forEach(pair => {
+      const [k, v] = pair.split('=').map(s => s && s.trim());
+      if (k && v) {
+        const field = FIELD_MAP[k.toLowerCase()];
+        if (field) pending[field] = v;
+      }
+    });
+    if (Object.keys(pending).length > 0) {
+      state.pendingProposals = pending;
+    }
+  }
+
+  if (mentionedProduct) {
+    if (mentionedProduct.colorVariants) {
+      let instruction = photoMatch ? photoMatch[1].trim() : null;
+
+      if (!instruction && detectedColor) {
+        const isPhotoColor = mentionedProduct.colorVariants.some(c => c.color === detectedColor);
+        if (isPhotoColor) {
+          instruction = `couleur=${detectedColor}`;
+        }
+      }
+
+      if (instruction === 'toutes') {
+        for (const variant of mentionedProduct.colorVariants) {
+          await sendWhatsAppImage(
+            phoneNumberId, from, variant.imageUrl,
+            `${mentionedProduct.name} (${variant.label || variant.color}) — ${mentionedProduct.price}`
+          );
+        }
+      } else if (instruction && instruction.startsWith('couleur=')) {
+        const colorName = instruction.replace('couleur=', '').trim();
+        const matchedColor = mentionedProduct.colorVariants.find(c =>
+          normalizeText(c.color) === normalizeText(colorName)
+        );
+        if (matchedColor) {
+          await sendWhatsAppImage(
+            phoneNumberId, from, matchedColor.imageUrl,
+            `${mentionedProduct.name} (${matchedColor.label || matchedColor.color}) — ${mentionedProduct.price}`
+          );
+        }
+      }
+    } else {
+      await sendWhatsAppImage(phoneNumberId, from, mentionedProduct.imageUrl, `${mentionedProduct.name} — ${mentionedProduct.price}`);
+    }
+  }
+
+  if (orderMatch && merchant.ownerWhatsApp) {
+    if (wasVoiceMessage) {
+      console.log('DEBUG - [COMMANDE] détecté sur un message vocal non confirmé par écrit : notification bloquée par sécurité.');
+    } else {
+      console.log('DEBUG - STATE AVANT VALIDATION:', JSON.stringify(state));
+      const validation = validateOrder(state, merchant);
+      console.log('DEBUG - VALIDATION RESULT:', JSON.stringify(validation));
+
+      if (validation.valid) {
+        const d = validation.orderDetails;
+        const notifResponse = await fetchWithTimeout(`https://graph.facebook.com/v21.0/${phoneNumberId}/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}` },
+          body: JSON.stringify({
+            messaging_product: 'whatsapp',
+            to: merchant.ownerWhatsApp,
+            text: { body: `🛍️ Nouvelle commande !\nProduit: ${d.product}\nTaille: ${d.size || 'aucune'}\nCouleur: ${d.color || 'aucune'}\nZone: ${d.zone}\nTotal: ${d.total} FCFA\nClient: ${from}\n\nVérifiez votre app Wave pour confirmer la réception du paiement avant de valider.` },
+          }),
+        });
+        if (notifResponse.ok) {
+          state.orderSent = true;
+        } else {
+          console.error('DEBUG - Échec envoi notification commerçant:', await notifResponse.text());
+        }
+      } else {
+        console.log('DEBUG - Commande refusée par validateOrder:', validation.errors.join(', '));
+        await sendWhatsAppText(
+          phoneNumberId,
+          from,
+          "Il me manque encore une information pour finaliser votre commande — pouvez-vous confirmer le produit, la taille, la couleur et votre zone de livraison ? 🙏"
+        );
+      }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// HANDLER
+// ---------------------------------------------------------------------------
 export default async function handler(req, res) {
   if (req.method === 'GET') {
     const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN;
@@ -586,6 +1001,7 @@ export default async function handler(req, res) {
 
       if (!message) return res.status(200).send('OK');
       const from = message.from;
+      const messageId = message.id;
 
       if (['image', 'sticker', 'location', 'document'].includes(message.type)) {
         await sendWhatsAppText(phoneNumberId, from, "Je ne peux pas encore traiter ce type de message. Dites-moi en quelques mots ce qui vous intéresse ! 😊");
@@ -610,225 +1026,36 @@ export default async function handler(req, res) {
       if (!merchant) return res.status(200).send('OK');
 
       const conversationKey = `${phoneNumberId}_${from}`;
-      const state = getConversationState(conversationKey);
-      console.log('DEBUG - A - STATE INITIAL:', JSON.stringify(state));
 
-      if (state.pendingProposals) {
-        if (isShortAffirmative(text)) {
-          for (const [field, value] of Object.entries(state.pendingProposals)) {
-            setStateField(state, field, value, wasVoiceMessage);
-          }
-        }
-        state.pendingProposals = null;
-      }
-      console.log('DEBUG - B - STATE APRES PROPOSITION:', JSON.stringify(state));
-
-      // Détection déterministe (produit/taille/couleur/zone) AVANT l'appel
-      // GPT — pas après. Ainsi l'état qu'on transmet à GPT ci-dessous reflète
-      // bien le message du tour actuel, pas celui d'avant.
-      const currentText = currentClientTextLower(text);
-
-      let mentionedProduct = merchant.products.find(p => productMatchesText(p, currentText));
-
-      if (mentionedProduct) {
-        const isNewProduct = state.product.value && state.product.value !== mentionedProduct.name;
-        setStateField(state, 'product', mentionedProduct.name, wasVoiceMessage);
-        if (isNewProduct) {
-          state.size = emptyField();
-          state.color = emptyField();
-        }
-      } else if (state.product.value) {
-        mentionedProduct = merchant.products.find(p => p.name === state.product.value);
-      }
-
-      if (mentionedProduct && mentionedProduct.sizes) {
-        const sizeMatch = mentionedProduct.sizes.find(s => {
-          const regex = new RegExp(`\\b${s}\\b`);
-          return regex.test(currentText);
-        });
-        if (sizeMatch) {
-          setStateField(state, 'size', sizeMatch, wasVoiceMessage);
-        }
-      }
-
-      let detectedColor = null;
-      if (mentionedProduct) {
-        let allColors = [];
-        if (mentionedProduct.colorVariants) {
-          allColors = allColors.concat(mentionedProduct.colorVariants.map(c => ({
-            value: c.color, label: c.label || c.color,
-          })));
-        }
-        if (mentionedProduct.extraColors) {
-          allColors = allColors.concat(mentionedProduct.extraColors.map(c => ({ value: c, label: c })));
-        }
-        if (mentionedProduct.colors) {
-          allColors = allColors.concat(mentionedProduct.colors.map(c => ({ value: c, label: c })));
-        }
-
-        const found = allColors.find(c =>
-          currentText.includes(normalizeText(c.value)) || currentText.includes(normalizeText(c.label))
-        );
-        if (found) {
-          detectedColor = found.value;
-          setStateField(state, 'color', found.value, wasVoiceMessage);
-        }
-      }
-
-      if (merchant.deliveryZones) {
-        let foundZone = null;
-        for (const dz of merchant.deliveryZones) {
-          const match = dz.zones.find(z => currentText.includes(normalizeText(z)));
-          if (match) { foundZone = match; break; }
-        }
-        if (foundZone) {
-          setStateField(state, 'deliveryZone', foundZone, wasVoiceMessage);
-        }
-      }
-
-      console.log('DEBUG - currentText:', currentText, '| produit détecté:', mentionedProduct ? mentionedProduct.name : 'AUCUN');
-      console.log('DEBUG - C - STATE APRES DETECTION:', JSON.stringify(state));
-
-      if (!conversationHistory[conversationKey]) conversationHistory[conversationKey] = [];
-      conversationHistory[conversationKey].push({ role: 'user', content: text });
-      const recentHistory = conversationHistory[conversationKey].slice(-10);
-
-      // L'état de confirmation réel est injecté à chaque tour comme message
-      // système supplémentaire — GPT n'a plus à le déduire seul de
-      // l'historique, ce qui évite qu'il "oublie" d'émettre [PROPOSITION]
-      // pour une donnée encore non confirmée.
-      const stateContext = buildStateContext(state);
-      console.log('DEBUG - D - STATE ENVOYE A GPT:', stateContext);
-
-      let aiData;
-      try {
-        const aiResponse = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}` },
-          body: JSON.stringify({
-            model: 'gpt-4o',
-            messages: [
-              { role: 'system', content: merchant.systemPrompt },
-              { role: 'system', content: stateContext },
-              ...recentHistory,
-            ],
-          }),
-        });
-        if (!aiResponse.ok) {
-          console.error('DEBUG - Échec appel OpenAI, statut:', aiResponse.status, await aiResponse.text());
-          await sendWhatsAppText(phoneNumberId, from, "Petit souci technique de notre côté, on revient vers vous très vite !");
-          return res.status(200).send('OK');
-        }
-        aiData = await aiResponse.json();
-      } catch (err) {
-        console.error('Erreur appel OpenAI:', err);
-        await sendWhatsAppText(phoneNumberId, from, "Petit souci technique de notre côté, on revient vers vous très vite !");
+      // --- Verrou par conversation ---
+      const lockToken = await acquireLock(conversationKey);
+      if (!lockToken) {
+        // Verrou non obtenu après plusieurs tentatives : on préfère répondre
+        // brièvement plutôt que de laisser le client sans réponse.
+        await sendWhatsAppText(phoneNumberId, from, "Un instant, je termine de traiter votre message précédent... 🙏");
         return res.status(200).send('OK');
       }
 
-      const replyText = aiData.choices?.[0]?.message?.content || "Désolé, je n'ai pas pu traiter votre message.";
-      console.log('DEBUG - GPT RAW:', replyText);
-      conversationHistory[conversationKey].push({ role: 'assistant', content: replyText });
-
-      const photoMatch = replyText.match(/\[PHOTO:\s*(.+?)\]/);
-      const orderMatch = replyText.match(/\[COMMANDE:\s*(.+?)\]/);
-      const propositionMatch = replyText.match(/\[PROPOSITION:\s*(.+?)\]/);
-
-      const finalClientText = replyText
-        .replace(/\[PHOTO:.+?\]/, '')
-        .replace(/\[COMMANDE:.+?\]/, '')
-        .replace(/\[PROPOSITION:.+?\]/, '')
-        .trim();
-
-      if (finalClientText) {
-        if (wasVoiceMessage) {
-          await generateAndSendVoiceReply(phoneNumberId, from, finalClientText);
+      try {
+        // --- Idempotence : ce message précis a-t-il déjà été traité ? ---
+        // Vérifié APRÈS acquisition du verrou : si un doublon WhatsApp arrive
+        // pendant qu'on traite l'original, il attend le verrou puis voit
+        // "déjà traité" une fois qu'il l'obtient.
+        if (await isMessageAlreadyProcessed(messageId)) {
+          console.log('DEBUG - Message déjà traité, ignoré:', messageId);
+          return res.status(200).send('OK');
         }
-        await sendWhatsAppText(phoneNumberId, from, finalClientText);
-      }
 
-      if (propositionMatch) {
-        const pending = {};
-        propositionMatch[1].split(';').forEach(pair => {
-          const [k, v] = pair.split('=').map(s => s && s.trim());
-          if (k && v) {
-            const field = FIELD_MAP[k.toLowerCase()];
-            if (field) pending[field] = v;
-          }
-        });
-        if (Object.keys(pending).length > 0) {
-          state.pendingProposals = pending;
-        }
-      }
+        const state = await loadState(conversationKey);
+        const history = await loadHistory(conversationKey);
 
-      if (mentionedProduct) {
-        if (mentionedProduct.colorVariants) {
-          let instruction = photoMatch ? photoMatch[1].trim() : null;
+        await processMessage({ merchant, phoneNumberId, from, text, wasVoiceMessage, state, history });
 
-          if (!instruction && detectedColor) {
-            const isPhotoColor = mentionedProduct.colorVariants.some(c => c.color === detectedColor);
-            if (isPhotoColor) {
-              instruction = `couleur=${detectedColor}`;
-            }
-          }
-
-          if (instruction === 'toutes') {
-            for (const variant of mentionedProduct.colorVariants) {
-              await sendWhatsAppImage(
-                phoneNumberId, from, variant.imageUrl,
-                `${mentionedProduct.name} (${variant.label || variant.color}) — ${mentionedProduct.price}`
-              );
-            }
-          } else if (instruction && instruction.startsWith('couleur=')) {
-            const colorName = instruction.replace('couleur=', '').trim();
-            const matchedColor = mentionedProduct.colorVariants.find(c =>
-              normalizeText(c.color) === normalizeText(colorName)
-            );
-            if (matchedColor) {
-              await sendWhatsAppImage(
-                phoneNumberId, from, matchedColor.imageUrl,
-                `${mentionedProduct.name} (${matchedColor.label || matchedColor.color}) — ${mentionedProduct.price}`
-              );
-            }
-          }
-        } else {
-          await sendWhatsAppImage(phoneNumberId, from, mentionedProduct.imageUrl, `${mentionedProduct.name} — ${mentionedProduct.price}`);
-        }
-      }
-
-      if (orderMatch && merchant.ownerWhatsApp) {
-        if (wasVoiceMessage) {
-          console.log('DEBUG - [COMMANDE] détecté sur un message vocal non confirmé par écrit : notification bloquée par sécurité.');
-        } else {
-          console.log('DEBUG - E - STATE AVANT VALIDATION:', JSON.stringify(state));
-          const validation = validateOrder(state, merchant);
-          console.log('DEBUG - VALIDATION RESULT:', JSON.stringify(validation));
-
-          if (validation.valid) {
-            const d = validation.orderDetails;
-            const notifResponse = await fetchWithTimeout(`https://graph.facebook.com/v21.0/${phoneNumberId}/messages`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}` },
-              body: JSON.stringify({
-                messaging_product: 'whatsapp',
-                to: merchant.ownerWhatsApp,
-                text: { body: `🛍️ Nouvelle commande !\nProduit: ${d.product}\nTaille: ${d.size || 'aucune'}\nCouleur: ${d.color || 'aucune'}\nZone: ${d.zone}\nTotal: ${d.total} FCFA\nClient: ${from}\n\nVérifiez votre app Wave pour confirmer la réception du paiement avant de valider.` },
-              }),
-            });
-            if (notifResponse.ok) {
-              state.orderSent = true;
-            } else {
-              console.error('DEBUG - Échec envoi notification commerçant:', await notifResponse.text());
-            }
-          } else {
-            console.log('DEBUG - Commande refusée par validateOrder:', validation.errors.join(', '));
-            await sendWhatsAppText(
-              phoneNumberId,
-              from,
-              "Il me manque encore une information pour finaliser votre commande — pouvez-vous confirmer le produit, la taille, la couleur et votre zone de livraison ? 🙏"
-            );
-          }
-        }
+        await saveState(conversationKey, state);
+        await saveHistory(conversationKey, history);
+        await markMessageProcessed(messageId);
+      } finally {
+        await releaseLock(conversationKey, lockToken);
       }
 
       return res.status(200).send('OK');
