@@ -806,6 +806,17 @@ async function generateAndSendVoiceReply(phoneNumberId, to, text) {
 // point de sauvegarde en sortie (succès ou échec).
 // ---------------------------------------------------------------------------
 async function processMessage({ merchant, phoneNumberId, from, text, wasVoiceMessage, state, history, messageId }) {
+  if (state.orderSent) {
+    // Une commande a déjà été transmise sur cette conversation. Sans cette
+    // réinitialisation, l'état (produit/taille/couleur/zone/orderSent) reste
+    // bloqué indéfiniment (TTL de 3 jours) et toute nouvelle commande — même
+    // légitime — se retrouve rejetée ou simplement re-narrée comme si de rien
+    // n'était. On repart donc sur un état de commande neuf : l'historique de
+    // conversation, lui, reste intact pour le contexte.
+    console.log('DEBUG - Commande précédente déjà transmise, réinitialisation de l\'état pour ce nouveau message', { messageId });
+    Object.assign(state, emptyState());
+  }
+
   if (state.pendingProposals) {
     if (isShortAffirmative(text)) {
       for (const [field, value] of Object.entries(state.pendingProposals)) {
