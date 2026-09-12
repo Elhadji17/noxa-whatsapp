@@ -1,0 +1,525 @@
+# @vercel/functions
+
+## 3.9.7
+
+### Patch Changes
+
+- @vercel/oidc@3.8.7
+
+## 3.9.6
+
+### Patch Changes
+
+- @vercel/oidc@3.8.6
+
+## 3.9.5
+
+### Patch Changes
+
+- 282f1c0: Use the current invocation deadline when waiting for database pool idle timers.
+
+## 3.9.4
+
+### Patch Changes
+
+- @vercel/oidc@3.8.5
+
+## 3.9.3
+
+### Patch Changes
+
+- 2da7809: Remove redundant and ineffective package tests.
+- Updated dependencies [2da7809]
+  - @vercel/oidc@3.8.4
+
+## 3.9.2
+
+### Patch Changes
+
+- @vercel/oidc@3.8.3
+
+## 3.9.1
+
+### Patch Changes
+
+- d72826e: Prevented unit tests and generated outputs from changing Turborepo task inputs during CI, and removed the redundant affected Unit test retry.
+
+## 3.9.0
+
+### Minor Changes
+
+- 0b0a4a8: Add a `metric()` helper for reporting custom metrics from Vercel Functions.
+
+## 3.8.0
+
+### Minor Changes
+
+- 8fb6c4f: Adds getDeadline
+
+## 3.7.7
+
+### Patch Changes
+
+- 6d7fbfa: Bump all workspace packages to trigger a full publish from vercel-internal.
+- Updated dependencies [6d7fbfa]
+  - @vercel/oidc@3.8.2
+
+## 3.7.6
+
+### Patch Changes
+
+- @vercel/oidc@3.8.1
+
+## 3.7.5
+
+### Patch Changes
+
+- Updated dependencies [d29a8f9]
+  - @vercel/oidc@3.8.0
+
+## 3.7.4
+
+### Patch Changes
+
+- Updated dependencies [fb93ff6]
+  - @vercel/oidc@3.7.1
+
+## 3.7.3
+
+### Patch Changes
+
+- Updated dependencies [415fde0]
+  - @vercel/oidc@3.7.0
+
+## 3.7.2
+
+### Patch Changes
+
+- 071569d: Add a `maxPayload` option to `experimental_upgradeWebSocket()`, defaulting to 256 KiB.
+  - @vercel/oidc@3.6.2
+
+## 3.7.1
+
+### Patch Changes
+
+- a7f1f7c: Make `ws` an optional peer dependency
+
+## 3.7.0
+
+### Minor Changes
+
+- 3f3ef14: Add `experimental_upgradeWebSocket()` API
+
+## 3.6.3
+
+### Patch Changes
+
+- Updated dependencies [01cf6c2]
+  - @vercel/oidc@3.6.1
+
+## 3.6.2
+
+### Patch Changes
+
+- Updated dependencies [fddeb55]
+  - @vercel/oidc@3.6.0
+
+## 3.6.1
+
+### Patch Changes
+
+- Updated dependencies [5a700dc]
+  - @vercel/oidc@3.5.0
+
+## 3.6.0
+
+### Minor Changes
+
+- 102f82b: `getCache().set()` now defaults `options.name` to the provided `key` when omitted, so cache entries get a human-readable label in o11y by default. Pass `name: ''` to suppress this behavior and use the hashed key.
+
+## 3.5.1
+
+### Patch Changes
+
+- ae20217: Upgrade to TypeScript 5.9
+- Updated dependencies [ae20217]
+  - @vercel/oidc@3.4.1
+
+## 3.5.0
+
+### Minor Changes
+
+- c56f851: Upgrade to TypeScript 5.9
+
+### Patch Changes
+
+- Updated dependencies [c56f851]
+  - @vercel/oidc@3.4.0
+
+## 3.4.6
+
+### Patch Changes
+
+- Updated dependencies [bf07448]
+  - @vercel/oidc@3.3.1
+
+## 3.4.5
+
+### Patch Changes
+
+- 56c9f89: add missing prettier dev dependency
+- Updated dependencies [24686d0]
+- Updated dependencies [56c9f89]
+  - @vercel/oidc@3.3.0
+
+## 3.4.4
+
+### Patch Changes
+
+- Pin `typedoc-plugin-markdown` to `3.15.2` and `typedoc-plugin-mdn-links` to `3.0.3` to match the version used by `@vercel/edge`. The previous `4.1.2` version requires `typedoc@0.26.x` as a peer dependency but was paired with `typedoc@0.24.6`, which caused CI failures whenever pnpm hoisted the 4.x plugin (the plugin calls `app.internationalization.addTranslations`, which does not exist in typedoc 0.24). The choice of which plugin version got hoisted was non-deterministic, which is why the failure appeared as flaky `Build @vercel/<pkg>` steps in CI. ([#16072](https://github.com/vercel/vercel/pull/16072))
+
+- Updated dependencies [[`2aa78415831fe89d1b21dd89704706bd1ad5e78d`](https://github.com/vercel/vercel/commit/2aa78415831fe89d1b21dd89704706bd1ad5e78d)]:
+  - @vercel/oidc@3.2.1
+
+## 3.4.3
+
+### Patch Changes
+
+- [functions] Revert "[functions] URL encode cache tags" ([#15213](https://github.com/vercel/vercel/pull/15213))
+
+## 3.4.2
+
+### Patch Changes
+
+- Updated dependencies [[`3760ea1e97fdc45dae36c64138023e1b1a075467`](https://github.com/vercel/vercel/commit/3760ea1e97fdc45dae36c64138023e1b1a075467)]:
+  - @vercel/oidc@3.2.0
+
+## 3.4.1
+
+### Patch Changes
+
+- Fix InMemoryCache to use JSON serialization for consistency with RuntimeCache ([#14751](https://github.com/vercel/vercel/pull/14751))
+
+  InMemoryCache now serializes values with `JSON.stringify()` on set and deserializes with `JSON.parse()` on get, matching the behavior of RuntimeCache. This ensures consistent behavior when switching between cache implementations (e.g., in-memory for development, remote for production), particularly for types that don't survive JSON round-trips like `Date`, `Map`, `Set`, and `undefined`.
+
+## 3.4.0
+
+### Minor Changes
+
+- Fix cache tags to be URL encoded before being sent to the cache API. Tags containing special characters (spaces, commas, ampersands, etc.) are now properly encoded using `encodeURIComponent`. This ([#14749](https://github.com/vercel/vercel/pull/14749))
+  ensures tags like `"my tag"` or `"category,item"` are correctly handled when setting cache entries or expiring tags.
+
+## 3.3.6
+
+### Patch Changes
+
+- Fix `TimeoutNegativeWarning` in Node.js v24 when process runs longer than 15 minutes by ensuring minimum wait time of 100ms ([#14491](https://github.com/vercel/vercel/pull/14491))
+
+## 3.3.5
+
+### Patch Changes
+
+- Updated dependencies [[`abdec3599b6897da76b90f2348a33e3c6c188353`](https://github.com/vercel/vercel/commit/abdec3599b6897da76b90f2348a33e3c6c188353), [`b9eae1d7c9f618355c6179eb58afb3c54318a046`](https://github.com/vercel/vercel/commit/b9eae1d7c9f618355c6179eb58afb3c54318a046)]:
+  - @vercel/oidc@3.1.0
+
+## 3.3.4
+
+### Patch Changes
+
+- [functions] update link to docs ([#14350](https://github.com/vercel/vercel/pull/14350))
+
+## 3.3.3
+
+### Patch Changes
+
+- Updated dependencies [[`77f5410794f22afb5fe3e4c204555f238c2850b3`](https://github.com/vercel/vercel/commit/77f5410794f22afb5fe3e4c204555f238c2850b3)]:
+  - @vercel/oidc@3.0.5
+
+## 3.3.2
+
+### Patch Changes
+
+- Fix `addCacheTag()` which was previously not working (no-op). ([#14241](https://github.com/vercel/vercel/pull/14241))
+
+## 3.3.1
+
+### Patch Changes
+
+- Updated dependencies [[`4221033be06182c11c9fe153a58810a2a393c3ce`](https://github.com/vercel/vercel/commit/4221033be06182c11c9fe153a58810a2a393c3ce)]:
+  - @vercel/oidc@3.0.4
+
+## 3.3.0
+
+### Minor Changes
+
+- Introduce Vercel AddCacheTag API: addCacheTag ([#14096](https://github.com/vercel/vercel/pull/14096))
+
+## 3.2.0
+
+### Minor Changes
+
+- Add new API for invalidateBySrcImage and dangerouslyDeleteBySrcImage ([#14111](https://github.com/vercel/vercel/pull/14111))
+
+## 3.1.4
+
+### Patch Changes
+
+- Updated dependencies [[`bcf9c18da437d9566eeff1fdaedb11abb00c080c`](https://github.com/vercel/vercel/commit/bcf9c18da437d9566eeff1fdaedb11abb00c080c)]:
+  - @vercel/oidc@3.0.3
+
+## 3.1.3
+
+### Patch Changes
+
+- Updated dependencies [[`29c2da6ff0118254bf9f6a5aa436cf95267d2d0a`](https://github.com/vercel/vercel/commit/29c2da6ff0118254bf9f6a5aa436cf95267d2d0a)]:
+  - @vercel/oidc@3.0.2
+
+## 3.1.2
+
+### Patch Changes
+
+- Add configurable timeout to RuntimeCache with sensible default to fail faster on gateway timeouts ([#14036](https://github.com/vercel/vercel/pull/14036))
+
+  The RuntimeCache client now includes a configurable timeout (default 500ms) for all fetch requests to prevent indefinite hangs on 502/504 gateway timeouts.
+  The timeout can be configured at build time via the `RUNTIME_CACHE_TIMEOUT` environment variable. When a timeout occurs, the request is aborted and the
+  error is logged via the onError callback.
+
+## 3.1.1
+
+### Patch Changes
+
+- Stronger detection of Vercel Runtime to reduce warnings ([#13776](https://github.com/vercel/vercel/pull/13776))
+
+- Updated dependencies [[`da6ca6d80915221b7f60cd711e4fada41a828e4c`](https://github.com/vercel/vercel/commit/da6ca6d80915221b7f60cd711e4fada41a828e4c), [`da6ca6d80915221b7f60cd711e4fada41a828e4c`](https://github.com/vercel/vercel/commit/da6ca6d80915221b7f60cd711e4fada41a828e4c), [`da6ca6d80915221b7f60cd711e4fada41a828e4c`](https://github.com/vercel/vercel/commit/da6ca6d80915221b7f60cd711e4fada41a828e4c)]:
+  - @vercel/oidc@3.0.1
+
+## 3.1.0
+
+### Minor Changes
+
+- Introduces Vercel Purge APIs: invalidateByTag, dangerouslyDeleteByTag ([#13867](https://github.com/vercel/vercel/pull/13867))
+
+## 3.0.0
+
+### Major Changes
+
+- Drop Node.js 18, bump minimum to Node.js 20 ([#13856](https://github.com/vercel/vercel/pull/13856))
+
+### Patch Changes
+
+- Updated dependencies [[`d1ca3ed3ac1b9830403dc9dc3520e963ef8bec8e`](https://github.com/vercel/vercel/commit/d1ca3ed3ac1b9830403dc9dc3520e963ef8bec8e)]:
+  - @vercel/oidc@3.0.0
+
+## 2.2.13
+
+### Patch Changes
+
+- Updated dependencies [[`821e4b8e8eded000b3d4e864594730e8741ef522`](https://github.com/vercel/vercel/commit/821e4b8e8eded000b3d4e864594730e8741ef522)]:
+  - @vercel/oidc@2.0.2
+
+## 2.2.12
+
+### Patch Changes
+
+- Fix package versions for oidc-aws-credentials-provider, vercel/functions, and publish the next version of vercel/oidc ([#13765](https://github.com/vercel/vercel/pull/13765))
+
+- Updated dependencies [[`2f5244647dc7d2c81bb688035952d4d45b6d707e`](https://github.com/vercel/vercel/commit/2f5244647dc7d2c81bb688035952d4d45b6d707e)]:
+  - @vercel/oidc@2.0.1
+
+## 2.2.11
+
+### Patch Changes
+
+- Fix dependency ([#13726](https://github.com/vercel/vercel/pull/13726))
+
+## 2.2.10
+
+### Patch Changes
+
+- Update dependency ([#13722](https://github.com/vercel/vercel/pull/13722))
+
+## 2.2.9
+
+### Patch Changes
+
+- Extract AWS dynamic import to async loader with error handling ([#13660](https://github.com/vercel/vercel/pull/13660))
+
+- Updated dependencies [[`a133e534e7dfd785beeeb0dcafed8d2c991e9f11`](https://github.com/vercel/vercel/commit/a133e534e7dfd785beeeb0dcafed8d2c991e9f11)]:
+  - @vercel/oidc@2.1.0
+
+## 2.2.8
+
+### Patch Changes
+
+- Declare attachDatabasePool stable ([#13673](https://github.com/vercel/vercel/pull/13673))
+
+## 2.2.7
+
+### Patch Changes
+
+- Make DB pool inert in local dev ([#13647](https://github.com/vercel/vercel/pull/13647))
+
+## 2.2.6
+
+### Patch Changes
+
+- Introduce attachDatabasePool function ([#13632](https://github.com/vercel/vercel/pull/13632))
+
+## 2.2.5
+
+### Patch Changes
+
+- extract oidc and aws oidc credential helpers from @vercel/functions into @vercel/oidc and @vercel/oidc-aws-credentials-provider. @vercel/functions re-exports the new functions as deprecated to maintain backwards compatibility. ([#13548](https://github.com/vercel/vercel/pull/13548))
+
+- Updated dependencies [[`fa8d4c76ea50c4844031f56209b21845818212fc`](https://github.com/vercel/vercel/commit/fa8d4c76ea50c4844031f56209b21845818212fc)]:
+  - @vercel/oidc@2.0.0
+
+## 2.2.5
+
+### Patch Changes
+
+- Extract oidc behavior into separate packages ([#13548](https://github.com/vercel/vercel/pull/13548))
+
+## 2.2.4
+
+### Patch Changes
+
+- Only warn runtime cache unavailable once ([#13560](https://github.com/vercel/vercel/pull/13560))
+
+- Reverting support for `preferredRegion` ([#13566](https://github.com/vercel/vercel/pull/13566))
+
+## 2.2.3
+
+### Patch Changes
+
+- Update runtime cache api to support usage during builds ([#13426](https://github.com/vercel/vercel/pull/13426))
+
+## 2.2.2
+
+### Patch Changes
+
+- Add warning when calling getCache to indicate that in-memory cache is being used. ([#13455](https://github.com/vercel/vercel/pull/13455))
+
+## 2.2.1
+
+### Patch Changes
+
+- Update runtime cache to always use the current cache instance to prevent holding a stale copy ([#13454](https://github.com/vercel/vercel/pull/13454))
+
+## 2.2.0
+
+### Minor Changes
+
+- Introduce `getVercelOidcTokenSync` ([#13429](https://github.com/vercel/vercel/pull/13429))
+
+## 2.1.0
+
+### Minor Changes
+
+- Change the load order of the OIDC token ([#13337](https://github.com/vercel/vercel/pull/13337))
+
+### Patch Changes
+
+- Rename getRuntimeCache to getCache ([#13325](https://github.com/vercel/vercel/pull/13325))
+
+## 2.0.3
+
+### Patch Changes
+
+- Rename FunctionCache / getFunctionCache to RuntimeCache / getRuntimeCache ([#13296](https://github.com/vercel/vercel/pull/13296))
+
+## 2.0.2
+
+### Patch Changes
+
+- Update in memory cache to use a singleton instance ([#13288](https://github.com/vercel/vercel/pull/13288))
+
+## 2.0.1
+
+### Patch Changes
+
+- Add Vercel Function Cache api ([#13221](https://github.com/vercel/vercel/pull/13221))
+
+## 2.0.0
+
+### Major Changes
+
+- [cli] Remove support for node@16 ([#12857](https://github.com/vercel/vercel/pull/12857))
+
+## 1.6.0
+
+### Minor Changes
+
+- Add middleware-related helper functions ([#12938](https://github.com/vercel/vercel/pull/12938))
+
+## 1.5.2
+
+### Patch Changes
+
+- [vercel/functions] add geolocation.postalCode ([#12753](https://github.com/vercel/vercel/pull/12753))
+
+## 1.5.1
+
+### Patch Changes
+
+- [@vercel/functions] update headers doc ([#12649](https://github.com/vercel/vercel/pull/12649))
+
+## 1.5.0
+
+### Minor Changes
+
+- ipAddress: accept headers as input ([#12429](https://github.com/vercel/vercel/pull/12429))
+
+## 1.4.2
+
+### Patch Changes
+
+- [functions] decode city name ([#12234](https://github.com/vercel/vercel/pull/12234))
+
+## 1.4.1
+
+### Patch Changes
+
+- Package files in the root folder ([#11982](https://github.com/vercel/vercel/pull/11982))
+
+## 1.4.0
+
+### Minor Changes
+
+- Added OIDC Token utility functions ([#11701](https://github.com/vercel/vercel/pull/11701))
+
+## 1.3.0
+
+### Minor Changes
+
+- [functions] add `getEnv` method. ([#11783](https://github.com/vercel/vercel/pull/11783))
+
+## 1.2.0
+
+### Minor Changes
+
+- Add `geolocation` & `ipAdress` methods. ([#11802](https://github.com/vercel/vercel/pull/11802))
+
+## 1.1.0
+
+### Minor Changes
+
+- Rewrite `@vercel/functions` to TypeScript ([#11791](https://github.com/vercel/vercel/pull/11791))
+
+## 1.0.2
+
+### Patch Changes
+
+- Convert package to CommonJS ([#11569](https://github.com/vercel/vercel/pull/11569))
+
+## 1.0.1
+
+### Patch Changes
+
+- Don't throw error if context is missing ([`0817527f9`](https://github.com/vercel/vercel/commit/0817527f9e9d0d5fceb73f21e695089349a96d3e))
+
+## 1.0.0
+
+### Major Changes
+
+- Initial release ([#11553](https://github.com/vercel/vercel/pull/11553))
