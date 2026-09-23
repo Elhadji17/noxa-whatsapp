@@ -1,0 +1,8 @@
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+torch==2.4.1
+transformers==4.44.2
+accelerate==0.34.2
+peft>=0.13.0
+torchao>=0.16.0
+python-multipart==0.0.9

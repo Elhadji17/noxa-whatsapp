@@ -13,6 +13,7 @@ Endpoints :
 
 import io
 import logging
+import os
 import time
 
 import librosa
@@ -27,6 +28,20 @@ logger = logging.getLogger("mms-asr-service")
 MODEL_NAME = "facebook/mms-1b-all"
 TARGET_LANG = "wol"
 
+# Plan B mémoire : si le chargement en float32 (~4 Go) plante par manque de
+# RAM, mettre la variable d'environnement MODEL_DTYPE=bfloat16 (~2 Go).
+# bfloat16 plutôt que float16 : meilleur support CPU dans les versions
+# récentes de PyTorch — float16 sur CPU est souvent mal optimisé, parfois
+# même plus lent malgré la RAM économisée.
+#
+# IMPORTANT : ne pas ajouter low_cpu_mem_usage=True ici. Cette option est
+# incompatible avec ignore_mismatched_sizes=True dans cette version de
+# transformers — la couche lm_head (redimensionnée pour l'adaptateur wolof)
+# se retrouve sur un tenseur "meta" vide, et le .to(device) plante avec
+# "Cannot copy out of meta tensor; no data!". Testé et confirmé.
+MODEL_DTYPE = os.environ.get("MODEL_DTYPE", "float32")
+DTYPE_MAP = {"float32": torch.float32, "bfloat16": torch.bfloat16}
+
 app = FastAPI(title="NOXA MMS-Wolof ASR service")
 
 # Chargé une seule fois au démarrage du service, pas à chaque requête —
@@ -40,16 +55,20 @@ device = None
 @app.on_event("startup")
 def load_model():
     global processor, model, device
-    logger.info("Chargement du processor (adaptateur wolof)...")
+    torch_dtype = DTYPE_MAP.get(MODEL_DTYPE, torch.float32)
+    logger.info(f"Chargement du processor (adaptateur wolof)... [dtype={MODEL_DTYPE}]")
     processor = AutoProcessor.from_pretrained(MODEL_NAME, target_lang=TARGET_LANG)
     logger.info("Chargement du modèle (peut prendre plusieurs minutes au premier démarrage)...")
     model = Wav2Vec2ForCTC.from_pretrained(
-        MODEL_NAME, target_lang=TARGET_LANG, ignore_mismatched_sizes=True
+        MODEL_NAME,
+        target_lang=TARGET_LANG,
+        ignore_mismatched_sizes=True,
+        torch_dtype=torch_dtype,
     )
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model = model.to(device)
     model.eval()
-    logger.info(f"Modèle chargé sur : {device}")
+    logger.info(f"Modèle chargé sur : {device} [dtype={MODEL_DTYPE}]")
 
 
 class HealthResponse(BaseModel):
@@ -57,6 +76,7 @@ class HealthResponse(BaseModel):
     device: str
     model: str
     target_lang: str
+    dtype: str
 
 
 class TranscriptionResponse(BaseModel):
@@ -69,7 +89,7 @@ def health():
     if model is None:
         raise HTTPException(status_code=503, detail="Modèle pas encore chargé")
     return HealthResponse(
-        status="ok", device=device, model=MODEL_NAME, target_lang=TARGET_LANG
+        status="ok", device=device, model=MODEL_NAME, target_lang=TARGET_LANG, dtype=MODEL_DTYPE
     )
 
 
@@ -87,8 +107,9 @@ async def transcribe(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail=f"Fichier audio invalide : {e}")
 
     try:
+        torch_dtype = DTYPE_MAP.get(MODEL_DTYPE, torch.float32)
         inputs = processor(speech, sampling_rate=16000, return_tensors="pt")
-        input_values = inputs.input_values.to(device)
+        input_values = inputs.input_values.to(device=device, dtype=torch_dtype)
         with torch.no_grad():
             logits = model(input_values).logits
         predicted_ids = torch.argmax(logits, dim=-1)

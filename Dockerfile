@@ -9,6 +9,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 COPY requirements.txt .
+# Test de diagnostic : retour temporaire au paquet torch standard (celui du
+# tout premier essai), pour vérifier si la version CPU-only introduite pour
+# le problème de disque est la cause du ralentissement massif observé en
+# Docker (~150-300s par vocal, contre 4-13s en exécution native Windows).
+# Le disque WSL2 dispose en réalité de 1 To de limite (confirmé dans Docker
+# Desktop), donc l'espace disque n'était probablement pas le vrai problème
+# du premier échec de build.
+RUN pip install --no-cache-dir torch==2.4.1
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app.py .

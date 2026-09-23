@@ -708,24 +708,126 @@ async function sendWhatsAppImage(phoneNumberId, to, imageUrl, caption) {
   return data;
 }
 
-async function transcribeWhatsAppAudio(mediaId) {
+// ---------------------------------------------------------------------------
+// ASR — fournisseur interchangeable (ASR_PROVIDER=whisper|xlsr|whosper)
+// ---------------------------------------------------------------------------
+// Choix retenu après benchmark sur 52 vocaux réels (voir le classeur de
+// comparaison) : MMS-1B-all est exclu de ce fichier — licence CC-BY-NC-4.0,
+// non exploitable commercialement, gardé uniquement dans les notebooks de
+// benchmark hors-ligne, jamais ici. Les deux candidats retenus :
+//   - xlsr    : abdouaziiz/wav2vec2-xls-r-300m-wolof-lm (MIT). Rapide
+//               (~55ms mesurés sur GPU), mais faible sur le français/
+//               code-switching.
+//   - whosper : CAYTU/whosper-large-v2 (Apache 2.0). Nettement meilleur sur
+//               le français/code-switching, mais ~4s par vocal même sur
+//               GPU (décodage autorégressif) — donc plus lent et plus
+//               coûteux à héberger.
+// Aucun des deux ne dépasse 3-4 bonnes reconnaissances sur 9 nombres
+// critiques testés (tailles/prix) : le garde-fou de confirmation écrite
+// obligatoire (plus bas dans ce fichier) reste donc requis quel que soit le
+// choix ici, ce n'est pas négociable.
+//
+// XLSR_SERVICE_URL / WHOSPER_SERVICE_URL : URL du service HTTP externe
+// (voir /mnt/user-data/outputs/mms-asr-service, à adapter pour chacun des
+// deux modèles) exposant un endpoint POST /transcribe qui accepte le fichier
+// audio et renvoie { text: "..." }. Tant que ces services ne sont pas
+// déployés, ASR_PROVIDER=whisper (comportement actuel, OpenAI) reste la
+// valeur par défaut — pas de rupture si les variables ne sont pas encore
+// configurées.
+const ASR_PROVIDER = process.env.ASR_PROVIDER || 'whisper';
+const ASR_SERVICE_TIMEOUT_MS = 30000; // Whosper peut prendre plusieurs secondes, même sur GPU.
+
+async function downloadWhatsAppAudio(mediaId) {
   const mediaInfoResponse = await fetchWithTimeout(`https://graph.facebook.com/v21.0/${mediaId}`, { headers: { 'Authorization': `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}` } });
   const mediaInfo = await mediaInfoResponse.json();
   const audioResponse = await fetchWithTimeout(mediaInfo.url, { headers: { 'Authorization': `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}` } });
-  const audioBuffer = await audioResponse.arrayBuffer();
+  return await audioResponse.arrayBuffer();
+}
+
+async function transcribeWithWhisperFR(audioBuffer) {
   const formData = new FormData();
   formData.append('file', new Blob([audioBuffer], { type: 'audio/ogg' }), 'audio.ogg');
   formData.append('model', 'whisper-1');
   formData.append('language', 'fr');
-  const transcriptionResponse = await fetchWithTimeout('https://api.openai.com/v1/audio/transcriptions', {
+  const response = await fetchWithTimeout('https://api.openai.com/v1/audio/transcriptions', {
     method: 'POST', headers: { 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}` }, body: formData,
   });
-  if (!transcriptionResponse.ok) {
-    console.error('DEBUG - Échec transcription:', await transcriptionResponse.text());
+  if (!response.ok) {
+    console.error('DEBUG - Échec transcription Whisper-FR:', await response.text());
     return null;
   }
-  const transcriptionData = await transcriptionResponse.json();
-  return transcriptionData.text || null;
+  const data = await response.json();
+  return data.text || null;
+}
+
+// Fonction commune : les deux services externes (XLS-R, Whosper) partagent
+// exactement le même contrat HTTP (voir mms-asr-service/app.py, réutilisable
+// tel quel pour XLS-R ; Whosper nécessite un service équivalent avec le
+// paquet `whosper` — non fourni ici, à construire sur le même modèle).
+async function transcribeViaExternalService(serviceUrl, audioBuffer, providerName) {
+  if (!serviceUrl) {
+    console.error(`DEBUG - ${providerName}: URL de service non configurée (variable d'environnement manquante)`);
+    return null;
+  }
+  const formData = new FormData();
+  formData.append('file', new Blob([audioBuffer], { type: 'audio/ogg' }), 'audio.ogg');
+  try {
+    const response = await fetchWithTimeout(`${serviceUrl}/transcribe`, {
+      method: 'POST', body: formData,
+    }, ASR_SERVICE_TIMEOUT_MS);
+    if (!response.ok) {
+      console.error(`DEBUG - Échec transcription ${providerName}:`, await response.text());
+      return null;
+    }
+    const data = await response.json();
+    return data.text || null;
+  } catch (err) {
+    console.error(`DEBUG - Erreur appel service ${providerName}:`, err);
+    return null;
+  }
+}
+
+function transcribeWithXLSR(audioBuffer) {
+  return transcribeViaExternalService(process.env.XLSR_SERVICE_URL, audioBuffer, 'XLS-R');
+}
+
+function transcribeWithWhosper(audioBuffer) {
+  return transcribeViaExternalService(process.env.WHOSPER_SERVICE_URL, audioBuffer, 'Whosper');
+}
+
+// Retourne { text, provider, fallbackUsed } plutôt qu'une simple chaîne —
+// savoir QUI a réellement produit la transcription est indispensable pour
+// interpréter les logs et ne pas croire, à tort, qu'un fournisseur "rapide"
+// a répondu alors que c'est le repli Whisper-FR qui a pris le relais.
+async function transcribeWhatsAppAudio(mediaId) {
+  const audioBuffer = await downloadWhatsAppAudio(mediaId);
+
+  let text = null;
+  let provider = ASR_PROVIDER;
+  let fallbackUsed = false;
+
+  if (ASR_PROVIDER === 'xlsr') {
+    text = await transcribeWithXLSR(audioBuffer);
+  } else if (ASR_PROVIDER === 'whosper') {
+    text = await transcribeWithWhosper(audioBuffer);
+  } else {
+    text = await transcribeWithWhisperFR(audioBuffer);
+  }
+
+  // Filet de sécurité : si le fournisseur choisi échoue (service down,
+  // timeout, variable d'environnement absente, réponse vide...) et que ce
+  // n'est pas déjà Whisper-FR, on retente avec Whisper-FR plutôt que de
+  // perdre le message.
+  if (!text && ASR_PROVIDER !== 'whisper') {
+    console.log(`DEBUG - Repli sur Whisper-FR après échec de ${ASR_PROVIDER}`);
+    text = await transcribeWithWhisperFR(audioBuffer);
+    provider = 'whisper';
+    fallbackUsed = true;
+  }
+
+  console.log('DEBUG - ASR RESULT', { requestedProvider: ASR_PROVIDER, actualProvider: provider, fallbackUsed, textLength: text?.length || 0 });
+
+  return { text, provider, fallbackUsed };
 }
 
 function formatNumbersForSpeech(text) {
@@ -1090,13 +1192,13 @@ async function handleIncomingMessage(body) {
     let wasVoiceMessage = false;
 
     if (message.type === 'audio' && message.audio?.id) {
-      text = await transcribeWhatsAppAudio(message.audio.id);
-      if (!text) {
+      const asrResult = await transcribeWhatsAppAudio(message.audio.id);
+      if (!asrResult.text) {
         await sendWhatsAppText(phoneNumberId, from, "Je n'ai pas bien compris votre message vocal, pouvez-vous réessayer ou l'écrire en texte ?");
         return;
       }
       wasVoiceMessage = true;
-      text = `[MESSAGE VOCAL - transcription potentiellement imparfaite] ${text}`;
+      text = `[MESSAGE VOCAL - transcription potentiellement imparfaite, fournisseur=${asrResult.provider}${asrResult.fallbackUsed ? ' (repli)' : ''}] ${asrResult.text}`;
     }
     if (!text) return;
 
