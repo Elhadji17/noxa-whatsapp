@@ -79,7 +79,15 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--url", required=True, help="URL du service, ex: https://noxa-xlsr-asr.onrender.com")
     parser.add_argument("--folder", required=True, help="Dossier contenant les fichiers .ogg")
+    parser.add_argument(
+        "--fichiers", nargs="+", default=None,
+        help="Liste explicite de noms de fichiers à tester (remplace FICHIERS_REPRESENTATIFS). "
+             "Utile pour tester les fichiers synthétiques longs : "
+             "--fichiers synthetique_10s.ogg synthetique_15s.ogg synthetique_20s.ogg synthetique_30s.ogg"
+    )
     args = parser.parse_args()
+
+    liste_fichiers = args.fichiers if args.fichiers else FICHIERS_REPRESENTATIFS
 
     print(f"Vérification du service : {args.url}/health")
     try:
@@ -92,7 +100,7 @@ def main():
 
     for passage in (1, 2):
         print(f"\n{'='*60}\nPASSAGE {passage}\n{'='*60}")
-        for i, nom_fichier in enumerate(FICHIERS_REPRESENTATIFS):
+        for i, nom_fichier in enumerate(liste_fichiers):
             chemin = os.path.join(args.folder, nom_fichier)
             if not os.path.exists(chemin):
                 print(f"  [MANQUANT] {nom_fichier}")

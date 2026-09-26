@@ -1,21 +1,21 @@
-﻿passage,statut,fichier,duree_audio_s,duration_ms,rtf,texte,erreur
-1,first_inference,conv1_tour1.ogg,2.41,1205,0.499,waaw salaam am geen so siir yi,
-1,warm,conv3_tour1.ogg,3.13,1606,0.513,solaa maani com ndaam benn fersu bu may wër am nganku,
-1,warm,conv6_tour1.ogg,3.53,2331,0.66,oo may ngàpp lei póllu ma deloo so siiru bisis toor yi,
-1,warm,conv6_tour4.ogg,3.35,1573,0.469,baax na ci boma sal baaw eskala pi ëneg gu ciaabl,
-1,warm,conv2_tour2.ogg,2.43,1145,0.471,ma fa saxn maron bi am na ona cuur kaaramkat,
-1,warm,conv7_tour4.ogg,5.33,4482,0.84,noo wax ma ell egsi ell laa wax mag la te tolluci kaaraankàt,
-1,warm,conv9_tour5.ogg,4.25,3321,0.781,dàkoor totaal bi di sen mel dox man naa fae par wiir,
-1,warm,conv4_tour4.ogg,3.31,7758,2.341,dàkkoor mai man ngiin ma ko liif ré parselasi na,
-1,warm,conv10_tour5.ogg,5.27,4679,0.887,akoor ma jël ulë bi ag naar bi may mempam cuir bi ca ràndë,
-1,warm,conv5_tour2.ogg,5.65,4600,0.814,boo waaw kooku lépp am na lu ci des ak lui yépp dinama araga de,
-2,warm,conv1_tour1.ogg,2.41,2113,0.875,waaw salaam am geen so siir yi,
-2,warm,conv3_tour1.ogg,3.13,2485,0.793,solaa maani com ndaam benn fersu bu may wër am nganku,
-2,warm,conv6_tour1.ogg,3.53,4137,1.171,oo may ngàpp lei póllu ma deloo so siiru bisis toor yi,
-2,warm,conv6_tour4.ogg,3.35,3718,1.109,baax na ci boma sal baaw eskala pi ëneg gu ciaabl,
-2,warm,conv2_tour2.ogg,2.43,4779,1.964,ma fa saxn maron bi am na ona cuur kaaramkat,
-2,warm,conv7_tour4.ogg,5.33,5146,0.965,noo wax ma ell egsi ell laa wax mag la te tolluci kaaraankàt,
-2,warm,conv9_tour5.ogg,4.25,3379,0.794,dàkoor totaal bi di sen mel dox man naa fae par wiir,
-2,warm,conv4_tour4.ogg,3.31,2527,0.763,dàkkoor mai man ngiin ma ko liif ré parselasi na,
-2,warm,conv10_tour5.ogg,5.27,4455,0.845,akoor ma jël ulë bi ag naar bi may mempam cuir bi ca ràndë,
-2,warm,conv5_tour2.ogg,5.65,4565,0.807,boo waaw kooku lépp am na lu ci des ak lui yépp dinama araga de,
+﻿passage,statut,fichier,duree_audio_s,duration_ms,rtf,texte,erreur,read_ms,decode_audio_ms,preprocess_ms,inference_ms,decode_text_ms
+1,first_inference,conv1_tour1.ogg,2.41,24704,10.236,waaw salaam am geen so siir yi,,0,15666,0,9036,0
+1,warm,conv3_tour1.ogg,3.13,2065,0.659,solaa maani com ndaam benn fersu bu may wër am nganku,,0,5,0,2058,0
+1,warm,conv6_tour1.ogg,3.53,1802,0.51,oo may ngàpp lei póllu ma deloo so siiru bisis toor yi,,0,6,0,1795,0
+1,warm,conv6_tour4.ogg,3.35,1545,0.461,baax na ci boma sal baaw eskala pi ëneg gu ciaabl,,0,5,0,1538,0
+1,warm,conv2_tour2.ogg,2.43,1141,0.469,ma fa saxn maron bi am na ona cuur kaaramkat,,0,4,0,1136,0
+1,warm,conv7_tour4.ogg,5.33,6088,1.141,noo wax ma ell egsi ell laa wax mag la te tolluci kaaraankàt,,0,9,14,6060,3
+1,warm,conv9_tour5.ogg,4.25,2388,0.561,dàkoor totaal bi di sen mel dox man naa fae par wiir,,0,8,4,2374,0
+1,warm,conv4_tour4.ogg,3.31,2381,0.719,dàkkoor mai man ngiin ma ko liif ré parselasi na,,0,6,0,2368,5
+1,warm,conv10_tour5.ogg,5.27,3556,0.674,akoor ma jël ulë bi ag naar bi may mempam cuir bi ca ràndë,,0,10,4,3539,2
+1,warm,conv5_tour2.ogg,5.65,4069,0.72,boo waaw kooku lépp am na lu ci des ak lui yépp dinama araga de,,0,10,3,4054,0
+2,warm,conv1_tour1.ogg,2.41,1820,0.754,waaw salaam am geen so siir yi,,0,5,0,1813,0
+2,warm,conv3_tour1.ogg,3.13,2248,0.717,solaa maani com ndaam benn fersu bu may wër am nganku,,0,6,0,2240,0
+2,warm,conv6_tour1.ogg,3.53,2368,0.67,oo may ngàpp lei póllu ma deloo so siiru bisis toor yi,,0,7,0,2360,0
+2,warm,conv6_tour4.ogg,3.35,2439,0.727,baax na ci boma sal baaw eskala pi ëneg gu ciaabl,,0,6,0,2431,0
+2,warm,conv2_tour2.ogg,2.43,2165,0.89,ma fa saxn maron bi am na ona cuur kaaramkat,,0,5,0,2157,1
+2,warm,conv7_tour4.ogg,5.33,3922,0.735,noo wax ma ell egsi ell laa wax mag la te tolluci kaaraankàt,,0,9,4,3904,3
+2,warm,conv9_tour5.ogg,4.25,2433,0.572,dàkoor totaal bi di sen mel dox man naa fae par wiir,,0,8,3,2420,0
+2,warm,conv4_tour4.ogg,3.31,2199,0.664,dàkkoor mai man ngiin ma ko liif ré parselasi na,,0,6,0,2181,11
+2,warm,conv10_tour5.ogg,5.27,3944,0.748,akoor ma jël ulë bi ag naar bi may mempam cuir bi ca ràndë,,0,9,8,3924,2
+2,warm,conv5_tour2.ogg,5.65,3651,0.646,boo waaw kooku lépp am na lu ci des ak lui yépp dinama araga de,,0,10,4,3632,3
