@@ -702,19 +702,42 @@ function isSessionRestartAnswer(rawText) {
   return /nouvelle|nouveau|autre chose|recommenc|repart|zero|non merci/i.test(cleaned);
 }
 
+// Un message qui nomme déjà clairement un produit, ou une zone de livraison
+// connue, n'a pas besoin qu'on lui demande "on continue ou pas ?" — il parle
+// de lui-même. Utilisé pour ne jamais faire barrage à une demande explicite
+// avec la question de reprise de session (voir handleSessionResumption).
+function messageHasBusinessContent(merchant, currentText) {
+  const productDetection = findMentionedProduct(merchant.products, currentText);
+  if (productDetection.product || productDetection.ambiguous) return true;
+  if (merchant.deliveryZones) {
+    for (const dz of merchant.deliveryZones) {
+      if (dz.zones.some(z => currentText.includes(normalizeText(z)))) return true;
+    }
+  }
+  return false;
+}
+
 // Intercepte le tout début de processMessage quand une commande en cours,
 // abandonnée depuis plus de STALE_STATE_THRESHOLD_MS, refait surface.
 // Retourne true si le message a été entièrement géré ici (il ne faut alors
-// pas continuer vers la détection produit/GPT pour ce tour) ; false sinon.
-async function handleSessionResumption({ phoneNumberId, from, text, state, messageId }) {
+// pas continuer vers la détection produit/GPT pour ce tour) ; false sinon —
+// y compris quand on vient de réinitialiser l'état pour un nouveau sujet,
+// afin que CE MÊME message soit ensuite traité normalement (pas perdu).
+async function handleSessionResumption({ merchant, phoneNumberId, from, text, state, messageId }) {
   const hasAnyData = state.product.value || state.size.value || state.color.value || state.deliveryZone.value;
+  const currentText = currentClientTextLower(text);
+  const hasNewContent = messageHasBusinessContent(merchant, currentText);
 
   if (state.awaitingSessionChoice) {
-    if (isSessionRestartAnswer(text)) {
-      console.log('DEBUG - Reprise de session : le client repart de zéro', { messageId });
+    if (hasNewContent || isSessionRestartAnswer(text)) {
+      // Le client répond soit par un signal explicite de nouveau départ,
+      // soit — plus fréquent — en nommant directement ce qu'il veut
+      // vraiment (ex: un autre produit). Dans les deux cas : on repart de
+      // zéro SANS renvoyer de message générique qui écraserait ce contenu
+      // — on laisse ce même message continuer vers la détection normale.
+      console.log('DEBUG - Reprise de session : nouveau départ (contenu explicite ou "nouvelle")', { messageId, hasNewContent });
       Object.assign(state, emptyState());
-      await sendWhatsAppText(phoneNumberId, from, "D'accord, on repart de zéro ! Dites-moi ce qui vous intéresse. 😊");
-      return true;
+      return false;
     }
     if (isSessionContinueAnswer(text)) {
       console.log('DEBUG - Reprise de session : le client continue', { messageId });
@@ -729,12 +752,21 @@ async function handleSessionResumption({ phoneNumberId, from, text, state, messa
       );
       return true;
     }
-    // Réponse pas claire — on repose la question plutôt que de deviner.
+    // Réponse pas claire et sans contenu exploitable — on repose la
+    // question plutôt que de deviner.
     await sendWhatsAppText(
       phoneNumberId, from,
       "Pardon, je n'ai pas bien compris : voulez-vous qu'on continue la commande en cours, ou qu'on reparte sur autre chose ? 🙏"
     );
     return true;
+  }
+
+  // Un message qui contient déjà une demande claire (produit, zone...) n'a
+  // jamais besoin de la question de reprise, quelle que soit l'ancienneté
+  // de l'état — il sera traité normalement, avec la réinitialisation
+  // partielle habituelle si le produit diffère de celui déjà en cours.
+  if (hasNewContent) {
+    return false;
   }
 
   if (hasAnyData && state.lastActivityAt && (Date.now() - state.lastActivityAt) > STALE_STATE_THRESHOLD_MS) {
@@ -1028,7 +1060,7 @@ async function processMessage({ merchant, phoneNumberId, from, text, wasVoiceMes
   // on demande explicitement au client s'il veut continuer ou repartir de
   // zéro plutôt que de deviner à sa place. Si géré ici, le message est
   // entièrement traité (réponse envoyée) : on s'arrête avant GPT pour ce tour.
-  if (await handleSessionResumption({ phoneNumberId, from, text, state, messageId })) {
+  if (await handleSessionResumption({ merchant, phoneNumberId, from, text, state, messageId })) {
     return;
   }
 
