@@ -12,6 +12,7 @@
   "type": "commonjs",
   "dependencies": {
     "@upstash/redis": "^1.38.4",
+    "@vercel/analytics": "^2.0.1",
     "@vercel/functions": "^3.9.7"
   }
 }
