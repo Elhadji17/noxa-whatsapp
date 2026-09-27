@@ -147,6 +147,8 @@ function emptyState() {
     deliveryZone: emptyField(),
     orderSent: false,
     pendingProposals: null,
+    lastActivityAt: null,       // ms epoch — dernière interaction sur cette commande
+    awaitingSessionChoice: false, // true tant qu'on attend la réponse "continuer ou repartir de zéro ?"
   };
 }
 
@@ -636,6 +638,14 @@ function setStateField(state, field, value, isVoice) {
   }
 }
 
+// Seuil au-delà duquel on considère qu'une conversation reprend après un
+// vrai moment d'absence (le client est parti déjeuner/dormir/vaquer), pas
+// juste un silence de quelques minutes pendant qu'il réfléchit. Passé ce
+// délai, on ne relance plus silencieusement l'ancien contexte : on demande
+// explicitement au client s'il veut continuer ou repartir de zéro — voir
+// handleSessionResumption().
+const STALE_STATE_THRESHOLD_MS = 3 * 60 * 60 * 1000; // 3 heures
+
 // Résume l'état réel de la commande pour GPT, à chaque tour, plutôt que de
 // compter sur GPT pour reconstruire ça seul depuis l'historique.
 function buildStateContext(state) {
@@ -658,6 +668,87 @@ correspondant avant de la considérer comme acquise, avant de l'utiliser
 dans une phrase de résumé, et avant de l'inclure dans [COMMANDE:...]. 
 Ne mentionne jamais une donnée "NON confirmé" comme si elle était déjà 
 réglée — pose la question explicitement à la place.`;
+}
+
+function formatDelai(ms) {
+  const heures = ms / (1000 * 60 * 60);
+  if (heures < 24) return `${Math.round(heures)} heure(s)`;
+  return `${Math.round(heures / 24)} jour(s)`;
+}
+
+// Construit un court récapitulatif lisible de la commande en cours, pour la
+// question "on continue ou on repart de zéro ?" — pas besoin de GPT ici,
+// c'est un texte déterministe à partir de l'état.
+function buildResumptionSummary(state) {
+  const parts = [];
+  if (state.product.value) parts.push(state.product.value);
+  if (state.size.value) parts.push(`taille ${state.size.value}`);
+  if (state.color.value) parts.push(`couleur ${state.color.value}`);
+  if (state.deliveryZone.value) parts.push(`livraison ${state.deliveryZone.value}`);
+  return parts.join(', ');
+}
+
+function isSessionContinueAnswer(rawText) {
+  const cleaned = currentClientTextLower(rawText);
+  return /^(oui+|ouais|meme|la meme|pareil|continuer|continue|on continue|ca marche|ca va|d'accord|daccord|ok+)$/i.test(cleaned)
+    || /continu/i.test(cleaned);
+}
+
+function isSessionRestartAnswer(rawText) {
+  const cleaned = currentClientTextLower(rawText);
+  return /nouvelle|nouveau|autre chose|recommenc|repart|zero|non merci/i.test(cleaned);
+}
+
+// Intercepte le tout début de processMessage quand une commande en cours,
+// abandonnée depuis plus de STALE_STATE_THRESHOLD_MS, refait surface.
+// Retourne true si le message a été entièrement géré ici (il ne faut alors
+// pas continuer vers la détection produit/GPT pour ce tour) ; false sinon.
+async function handleSessionResumption({ phoneNumberId, from, text, state, messageId }) {
+  const hasAnyData = state.product.value || state.size.value || state.color.value || state.deliveryZone.value;
+
+  if (state.awaitingSessionChoice) {
+    if (isSessionRestartAnswer(text)) {
+      console.log('DEBUG - Reprise de session : le client repart de zéro', { messageId });
+      Object.assign(state, emptyState());
+      await sendWhatsAppText(phoneNumberId, from, "D'accord, on repart de zéro ! Dites-moi ce qui vous intéresse. 😊");
+      return true;
+    }
+    if (isSessionContinueAnswer(text)) {
+      console.log('DEBUG - Reprise de session : le client continue', { messageId });
+      state.awaitingSessionChoice = false;
+      state.lastActivityAt = Date.now();
+      const recap = buildResumptionSummary(state);
+      await sendWhatsAppText(
+        phoneNumberId, from,
+        recap
+          ? `Parfait, on reprend ! Pour rappel : ${recap}. Dites-moi comment continuer. 🙏`
+          : "Parfait, on continue ! Dites-moi où on en était. 🙏"
+      );
+      return true;
+    }
+    // Réponse pas claire — on repose la question plutôt que de deviner.
+    await sendWhatsAppText(
+      phoneNumberId, from,
+      "Pardon, je n'ai pas bien compris : voulez-vous qu'on continue la commande en cours, ou qu'on reparte sur autre chose ? 🙏"
+    );
+    return true;
+  }
+
+  if (hasAnyData && state.lastActivityAt && (Date.now() - state.lastActivityAt) > STALE_STATE_THRESHOLD_MS) {
+    console.log('DEBUG - Session ancienne détectée, question de reprise posée', {
+      messageId, delaiMs: Date.now() - state.lastActivityAt,
+    });
+    state.awaitingSessionChoice = true;
+    const recap = buildResumptionSummary(state);
+    await sendWhatsAppText(
+      phoneNumberId, from,
+      `On avait commencé à discuter${recap ? ' de ' + recap : ''} il y a ${formatDelai(Date.now() - state.lastActivityAt)}. ` +
+      `Vous voulez qu'on continue cette commande, ou qu'on reparte sur autre chose ? 🙏`
+    );
+    return true;
+  }
+
+  return false;
 }
 
 function currentClientTextLower(rawText) {
@@ -735,7 +826,16 @@ async function sendWhatsAppImage(phoneNumberId, to, imageUrl, caption) {
 // valeur par défaut — pas de rupture si les variables ne sont pas encore
 // configurées.
 const ASR_PROVIDER = process.env.ASR_PROVIDER || 'whisper';
-const ASR_SERVICE_TIMEOUT_MS = 30000; // Whosper peut prendre plusieurs secondes, même sur GPU.
+// 60s, pas 30s : le benchmark de concurrence sur XLS-R/Render 1c-2g a montré
+// un service séquentiel (pas de vrai parallélisme) — un lot de 3 requêtes
+// simultanées a pris jusqu'à ~18,5s pour la dernière, et un épisode isolé
+// non expliqué a atteint ~21s pour une seule requête. 30s laissait trop peu
+// de marge si plusieurs commerçants envoient un vocal presque en même temps.
+const ASR_SERVICE_TIMEOUT_MS = 60000;
+// Secret partagé entre ce webhook et les services ASR externes (XLS-R,
+// Whosper) — évite qu'un tiers découvrant l'URL Render puisse consommer les
+// ressources du service. Voir le correctif correspondant côté app.py.
+const ASR_SERVICE_SHARED_SECRET = process.env.ASR_SERVICE_SHARED_SECRET;
 
 async function downloadWhatsAppAudio(mediaId) {
   const mediaInfoResponse = await fetchWithTimeout(`https://graph.facebook.com/v21.0/${mediaId}`, { headers: { 'Authorization': `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}` } });
@@ -773,7 +873,9 @@ async function transcribeViaExternalService(serviceUrl, audioBuffer, providerNam
   formData.append('file', new Blob([audioBuffer], { type: 'audio/ogg' }), 'audio.ogg');
   try {
     const response = await fetchWithTimeout(`${serviceUrl}/transcribe`, {
-      method: 'POST', body: formData,
+      method: 'POST',
+      headers: ASR_SERVICE_SHARED_SECRET ? { 'Authorization': `Bearer ${ASR_SERVICE_SHARED_SECRET}` } : {},
+      body: formData,
     }, ASR_SERVICE_TIMEOUT_MS);
     if (!response.ok) {
       console.error(`DEBUG - Échec transcription ${providerName}:`, await response.text());
@@ -919,6 +1021,14 @@ async function processMessage({ merchant, phoneNumberId, from, text, wasVoiceMes
     Object.assign(state, emptyState());
   }
 
+  // Une commande en cours, abandonnée depuis un moment, qui refait surface —
+  // on demande explicitement au client s'il veut continuer ou repartir de
+  // zéro plutôt que de deviner à sa place. Si géré ici, le message est
+  // entièrement traité (réponse envoyée) : on s'arrête avant GPT pour ce tour.
+  if (await handleSessionResumption({ phoneNumberId, from, text, state, messageId })) {
+    return;
+  }
+
   if (state.pendingProposals) {
     if (isShortAffirmative(text)) {
       for (const [field, value] of Object.entries(state.pendingProposals)) {
@@ -1010,6 +1120,10 @@ async function processMessage({ merchant, phoneNumberId, from, text, wasVoiceMes
   const recentHistory = history.slice(-10);
 
   const stateContext = buildStateContext(state);
+  // Marque cette interaction comme le nouveau point de référence pour
+  // détecter une future reprise de session après un silence prolongé (voir
+  // handleSessionResumption).
+  state.lastActivityAt = Date.now();
 
   let aiData;
   try {
@@ -1194,6 +1308,9 @@ async function handleIncomingMessage(body) {
     if (message.type === 'audio' && message.audio?.id) {
       const asrResult = await transcribeWhatsAppAudio(message.audio.id);
       if (!asrResult.text) {
+        // Échec total : même le repli Whisper-FR n'a rien donné. Log dédié
+        // et comptable — jusqu'ici invisible dans les métriques du pilote.
+        console.log('DEBUG - ASR ÉCHEC TOTAL', { messageId, requestedProvider: ASR_PROVIDER });
         await sendWhatsAppText(phoneNumberId, from, "Je n'ai pas bien compris votre message vocal, pouvez-vous réessayer ou l'écrire en texte ?");
         return;
       }
