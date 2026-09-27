@@ -644,10 +644,7 @@ function setStateField(state, field, value, isVoice) {
 // délai, on ne relance plus silencieusement l'ancien contexte : on demande
 // explicitement au client s'il veut continuer ou repartir de zéro — voir
 // handleSessionResumption().
-// ⚠️ TEMPORAIRE POUR TEST — remettre à 3 * 60 * 60 * 1000 (3 heures) avant
-// de repasser en usage réel avec les commerçants. Valeur abaissée à 2 minutes
-// uniquement pour vérifier rapidement le comportement de reprise de session.
-const STALE_STATE_THRESHOLD_MS = 2 * 60 * 1000; // 2 minutes — TEST UNIQUEMENT
+const STALE_STATE_THRESHOLD_MS = 3 * 60 * 60 * 1000; // 3 heures
 
 // Résume l'état réel de la commande pour GPT, à chaque tour, plutôt que de
 // compter sur GPT pour reconstruire ça seul depuis l'historique.
@@ -674,7 +671,9 @@ réglée — pose la question explicitement à la place.`;
 }
 
 function formatDelai(ms) {
-  const heures = ms / (1000 * 60 * 60);
+  const minutes = ms / (1000 * 60);
+  const heures = minutes / 60;
+  if (minutes < 60) return `${Math.max(1, Math.round(minutes))} minute(s)`;
   if (heures < 24) return `${Math.round(heures)} heure(s)`;
   return `${Math.round(heures / 24)} jour(s)`;
 }
