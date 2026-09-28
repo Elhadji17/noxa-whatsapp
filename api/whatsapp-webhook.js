@@ -148,7 +148,6 @@ function emptyState() {
     orderSent: false,
     pendingProposals: null,
     lastActivityAt: null,       // ms epoch — dernière interaction sur cette commande
-    wolofAlertAt: null,         // ms epoch — dernière alerte "client ne comprend pas le français" envoyée au commerçant (anti-spam)
     awaitingSessionChoice: false, // true tant qu'on attend la réponse "continuer ou repartir de zéro ?"
   };
 }
@@ -252,8 +251,7 @@ propre réponse pour deviner ce qu'un "oui" confirme.
 
 GESTION D'UN CLIENT QUI NE COMPREND PAS LE FRANÇAIS :
 Si le client indique, en wolof ou autrement, qu'il ne comprend pas le 
-français (ex: "deggouma français", "waxal wolof", ou toute formulation 
-similaire), NE dis JAMAIS simplement que tu ne parles que français sans 
+français (ex: "deggouma français", "waxal wolof", "je ne comprends pas le français"), NE dis JAMAIS simplement que tu ne parles que français sans 
 autre solution — ça laisse le client dans une impasse. À la place :
 1. Réponds en une phrase très courte, en n'utilisant QUE les expressions 
    wolof fixes autorisées plus haut (jamais une phrase wolof complète 
@@ -267,6 +265,15 @@ Ce marqueur prévient automatiquement le commerçant, qui parle wolof, pour
 qu'il puisse prendre le relais directement avec le client si besoin. 
 N'ajoute ce marqueur qu'une seule fois par blocage linguistique constaté, 
 pas à chaque message si le client continue malgré tout en français ensuite.
+
+IMPORTANT — ce marqueur est réservé à un blocage EXPLICITE : le client dit 
+lui-même qu'il ne comprend pas le français, ou demande qu'on lui parle 
+wolof. Ne l'ajoute JAMAIS pour : une simple salutation ("salamalekoum", 
+"nanga def"...), un message écrit en wolof ou mêlant wolof et français, une 
+réponse courte ("waaw", "oui"), ou une question sur un produit. Écrire en 
+wolof ne signifie PAS qu'un client ne comprend pas le français : beaucoup de 
+clients écrivent en wolof tout en comprenant très bien les réponses en 
+français.
 
 RÈGLE DE SÉCURITÉ VOCALE (TRÈS IMPORTANT) :
 Certains messages du client sont précédés de "[MESSAGE VOCAL - transcription 
@@ -746,6 +753,18 @@ async function handleSessionResumption({ merchant, phoneNumberId, from, text, st
   const currentText = currentClientTextLower(text);
   const hasNewContent = messageHasBusinessContent(merchant, currentText);
 
+  // Trace de décision : sans elle, impossible de savoir a posteriori
+  // pourquoi une reprise de session a (ou n'a pas) été proposée.
+  if (hasAnyData || state.awaitingSessionChoice) {
+    console.log('DEBUG - SESSION CHECK', {
+      messageId,
+      hasAnyData: Boolean(hasAnyData),
+      awaiting: Boolean(state.awaitingSessionChoice),
+      hasNewContent,
+      elapsedMin: state.lastActivityAt ? Math.round((Date.now() - state.lastActivityAt) / 60000) : null,
+    });
+  }
+
   if (state.awaitingSessionChoice) {
     if (hasNewContent || isSessionRestartAnswer(text)) {
       // Le client répond soit par un signal explicite de nouveau départ,
@@ -813,6 +832,10 @@ function isShortAffirmative(rawText) {
   return /^(oui+|ouais|ok+|okay|d'accord|daccord|c'est bon|cest bon|ca marche|confirme|parfait|va y)$/i.test(cleaned);
 }
 
+function stripWolofMarker(content) {
+  return String(content || '').replace(/\s*\[BESOIN_WOLOF\]/g, '').trim();
+}
+
 // Détection DÉTERMINISTE (sans GPT) d'un client qui dit ne pas comprendre le
 // français ou qui demande explicitement qu'on lui parle wolof. Volontairement
 // ÉTROITE : seuls des signaux forts déclenchent, jamais le simple mot
@@ -833,6 +856,17 @@ function indicatesFrenchBlock(rawText) {
   const asksForWolof = /\b(waxal|wax ma|wax ak ma)\b.{0,15}\bwolof\b/.test(t);
 
   return (wolofDontUnderstand && mentionsFrench) || frenchDontUnderstand || asksForWolof;
+}
+
+// Le marqueur [BESOIN_WOLOF] émis par GPT est un signal FAIBLE : un faux
+// positif a été observé en réel sur un simple "salamalekoum". Il n'est donc
+// retenu seul que sur un message vocal (l'ASR peut déformer la phrase au
+// point que indicatesFrenchBlock ne la reconnaisse plus). Sur du texte écrit,
+// il doit être corroboré par une mention explicite de la langue.
+function isGptWolofSignalCredible({ langueBlocageMatch, wasVoiceMessage, text }) {
+  if (!langueBlocageMatch) return false;
+  if (wasVoiceMessage) return true;
+  return /fran[cs]|wolof/.test(currentClientTextLower(text));
 }
 
 const FIELD_MAP = { produit: 'product', taille: 'size', couleur: 'color', zone: 'deliveryZone' };
@@ -1192,7 +1226,15 @@ async function processMessage({ merchant, phoneNumberId, from, text, wasVoiceMes
   console.log('DEBUG - STATE APRES DETECTION:', JSON.stringify(state));
 
   history.push({ role: 'user', content: text });
-  const recentHistory = history.slice(-10);
+  // L'historique stocke les réponses brutes de GPT, marqueurs compris. Pour
+  // [BESOIN_WOLOF] c'est un risque : un modèle qui revoit son propre marqueur
+  // dans le contexte a tendance à le recopier sur les tours suivants, même
+  // sur une simple salutation. On le retire à l'usage (donc aussi de
+  // l'historique déjà stocké), sans toucher aux autres marqueurs dont le
+  // comportement est déjà éprouvé.
+  const recentHistory = history.slice(-10).map(m =>
+    m.role === 'assistant' ? { ...m, content: stripWolofMarker(m.content) } : m
+  );
 
   // Détection déterministe : ne pas laisser GPT repérer seul ce signal au
   // milieu de tout le contexte (catalogue, état, historique, règles). Si elle
@@ -1261,30 +1303,61 @@ async function processMessage({ merchant, phoneNumberId, from, text, wasVoiceMes
   // Client bloqué par la langue : on ne tente pas de générer du wolof
   // complet (non fiable, voir le prompt système), on fait intervenir le
   // commerçant directement — c'est lui qui parle réellement wolof.
-  // Deux signaux indépendants : la détection déterministe (fiable sur du
-  // texte écrit) OU le marqueur GPT (utile quand un vocal a été déformé par
-  // l'ASR au point que la détection déterministe ne reconnaît plus la phrase).
-  // Anti-spam : un client qui répète "deggouma" plusieurs fois ne doit pas
-  // faire sonner le téléphone du commerçant à chaque message.
-  const WOLOF_ALERT_COOLDOWN_MS = 6 * 60 * 60 * 1000;
-  const needsWolofAlert = langueBlocageMatch || frenchBlockDetected;
-  const recentlyAlerted = state.wolofAlertAt && (Date.now() - state.wolofAlertAt) < WOLOF_ALERT_COOLDOWN_MS;
+  //
+  // Deux signaux de FIABILITÉ DIFFÉRENTE :
+  //  - la détection déterministe (regex) : fiable sur du texte écrit, elle
+  //    déclenche seule ;
+  //  - le marqueur GPT : signal faible, filtré par isGptWolofSignalCredible.
+  const WOLOF_ALERT_COOLDOWN_SECONDS = 6 * 60 * 60;
+  const gptSignalCredible = isGptWolofSignalCredible({ langueBlocageMatch, wasVoiceMessage, text });
+  const needsWolofAlert = frenchBlockDetected || gptSignalCredible;
+  const alertSource = frenchBlockDetected
+    ? (langueBlocageMatch ? 'détection déterministe + marqueur GPT' : 'détection déterministe seule')
+    : 'marqueur GPT seul';
 
-  if (needsWolofAlert && merchant.ownerWhatsApp && !recentlyAlerted) {
-    try {
-      await sendWhatsAppText(
-        phoneNumberId, merchant.ownerWhatsApp,
-        `🗣️ Un client (${from}) ne comprend pas le français — pouvez-vous lui répondre directement en wolof ? Message WhatsApp : wa.me/${from}`
-      );
-      state.wolofAlertAt = Date.now();
-      console.log('DEBUG - NOTIFICATION BESOIN WOLOF envoyée au commerçant', {
-        messageId, from, source: frenchBlockDetected ? 'détection déterministe' : 'marqueur GPT',
-      });
-    } catch (err) {
-      console.error('DEBUG - Échec notification besoin wolof:', err);
+  if (langueBlocageMatch && !frenchBlockDetected && !gptSignalCredible) {
+    // Rendu visible pour mesurer, pendant le pilote, la fréquence de ces
+    // faux positifs évités.
+    console.log('DEBUG - Marqueur BESOIN_WOLOF ignoré (message texte sans mention de la langue)', { messageId, from });
+  }
+
+  if (needsWolofAlert && merchant.ownerWhatsApp) {
+    // Deux clés Redis distinctes, HORS de `state` (l'état est réinitialisé
+    // lors d'un nouveau départ ou après une commande, ce qui effacerait le
+    // délai). SET NX EX est atomique : un seul appelant obtient la clé.
+    //  - strongKey : posée par une détection déterministe ;
+    //  - gptKey    : posée par un marqueur GPT seul.
+    // Séparées pour qu'une fausse alerte GPT ne bloque PAS pendant 6 h une
+    // vraie détection déterministe. À l'inverse, une alerte GPT seule est
+    // ignorée si une alerte déterministe a déjà été envoyée : le commerçant
+    // est déjà prévenu.
+    const strongKey = `wolofalert:${phoneNumberId}_${from}`;
+    const gptKey = `wolofalert-gpt:${phoneNumberId}_${from}`;
+    let alertKey = null;
+    if (frenchBlockDetected) {
+      const acquired = await redis.set(strongKey, '1', { nx: true, ex: WOLOF_ALERT_COOLDOWN_SECONDS });
+      if (acquired) alertKey = strongKey;
+    } else if (!(await redis.get(strongKey))) {
+      const acquired = await redis.set(gptKey, '1', { nx: true, ex: WOLOF_ALERT_COOLDOWN_SECONDS });
+      if (acquired) alertKey = gptKey;
     }
-  } else if (needsWolofAlert && recentlyAlerted) {
-    console.log('DEBUG - Besoin wolof détecté mais commerçant déjà alerté récemment, pas de doublon', { messageId, from });
+
+    if (alertKey) {
+      try {
+        await sendWhatsAppText(
+          phoneNumberId, merchant.ownerWhatsApp,
+          `🗣️ Un client (${from}) ne comprend pas le français — pouvez-vous lui répondre directement en wolof ? Message WhatsApp : wa.me/${from}`
+        );
+        console.log('DEBUG - NOTIFICATION BESOIN WOLOF envoyée au commerçant', { messageId, from, source: alertSource });
+      } catch (err) {
+        // L'envoi a échoué : on libère la clé pour ne pas bloquer 6 h une
+        // alerte qui n'est jamais partie.
+        await redis.del(alertKey);
+        console.error('DEBUG - Échec notification besoin wolof:', err);
+      }
+    } else {
+      console.log('DEBUG - Besoin wolof détecté mais commerçant déjà alerté récemment, pas de doublon', { messageId, from, source: alertSource });
+    }
   }
 
   if (propositionMatch) {
