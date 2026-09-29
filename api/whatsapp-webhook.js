@@ -1354,12 +1354,17 @@ async function processMessage({ merchant, phoneNumberId, from, text, wasVoiceMes
   const propositionMatch = replyText.match(/\[PROPOSITION:\s*(.+?)\]/);
   const langueBlocageMatch = /\[BESOIN_WOLOF\]/.test(replyText);
 
-  const finalClientText = replyText
-    .replace(/\[PHOTO:.+?\]/, '')
-    .replace(/\[COMMANDE:.+?\]/, '')
-    .replace(/\[PROPOSITION:.+?\]/, '')
-    .replace(/\[BESOIN_WOLOF\]/, '')
-    .trim();
+  // Filet générique, pas seulement les 4 marqueurs connus : un test à l'aveugle
+  // (voir ab-wolof/) a montré GPT inventer [PRODUIT: ...], un marqueur qui
+  // n'existe dans aucune instruction du prompt. L'ancien code, qui ne retirait
+  // que PHOTO/COMMANDE/PROPOSITION/BESOIN_WOLOF nommément, l'aurait laissé
+  // partir tel quel au client. Cette regex retire TOUT crochet dont le
+  // contenu commence par un mot en MAJUSCULES (le style que le prompt utilise
+  // pour ses propres marqueurs), qu'il soit reconnu ou non ci-dessous.
+  // g (global) : retire aussi une éventuelle répétition du même marqueur,
+  // pas seulement la première occurrence comme avant.
+  const MARQUEUR_INTERNE = /\[[A-ZÀ-Ÿ_]{3,}(?::[^\]]*)?\]/g;
+  const finalClientText = replyText.replace(MARQUEUR_INTERNE, '').replace(/\s{2,}/g, ' ').trim();
 
   if (finalClientText) {
     if (wasVoiceMessage) {
