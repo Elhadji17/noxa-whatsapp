@@ -1,0 +1,221 @@
+{
+  "name": "AD Shoes",
+  "ownerWhatsApp": "33664017511",
+  "wavePaymentNumber": "221781645041",
+  "deliveryZones": [
+    {
+      "zones": [
+        "Dakar Centre",
+        "Plateau",
+        "Médina"
+      ],
+      "price": 1500
+    },
+    {
+      "zones": [
+        "Sacré-Cœur",
+        "Mermoz",
+        "Ouakam",
+        "Yoff",
+        "Maristes"
+      ],
+      "price": 1500
+    },
+    {
+      "zones": [
+        "Parcelles Assainies",
+        "Guédiawaye",
+        "Pikine"
+      ],
+      "price": 2000
+    },
+    {
+      "zones": [
+        "Rufisque",
+        "Bargny"
+      ],
+      "price": 3000
+    }
+  ],
+  "hours": "Lundi-Samedi 9h-20h30 (non-stop), Dimanche 15h-20h",
+  "products": [
+    {
+      "name": "Moccasin Cuir Dakar Classic",
+      "aliases": [
+        "mocassin"
+      ],
+      "sizes": [
+        "39",
+        "40",
+        "41",
+        "42",
+        "43",
+        "44"
+      ],
+      "colorVariants": [
+        {
+          "color": "Noir",
+          "imageUrl": "https://noxa-whatsapp.vercel.app/images/moccasin-noir.jpg"
+        },
+        {
+          "color": "Marron Chocolat",
+          "imageUrl": "https://noxa-whatsapp.vercel.app/images/moccasin-marron.jpg"
+        }
+      ],
+      "extraColors": [
+        "Tan"
+      ],
+      "price": "18 000 FCFA"
+    },
+    {
+      "name": "Chaussure de ville Ndakarou",
+      "sizes": [
+        "40",
+        "41",
+        "42",
+        "43",
+        "44",
+        "45"
+      ],
+      "colorVariants": [
+        {
+          "color": "Noir",
+          "label": "Noir (Goudi)",
+          "imageUrl": "https://noxa-whatsapp.vercel.app/images/ndakarou-noir.jpg"
+        },
+        {
+          "color": "Marron",
+          "label": "Marron (Bant)",
+          "imageUrl": "https://noxa-whatsapp.vercel.app/images/ndakarou-marron.jpg"
+        }
+      ],
+      "extraColors": [
+        "Vert"
+      ],
+      "price": "22 000 FCFA"
+    },
+    {
+      "name": "Sandale Cuir Samarra",
+      "sizes": [
+        "38",
+        "39",
+        "40",
+        "41",
+        "42",
+        "43"
+      ],
+      "colorVariants": [
+        {
+          "color": "Noir",
+          "imageUrl": "https://noxa-whatsapp.vercel.app/images/samarra-noir.jpg"
+        },
+        {
+          "color": "Marron",
+          "imageUrl": "https://noxa-whatsapp.vercel.app/images/samarra-marron.jpg"
+        }
+      ],
+      "price": "12 000 FCFA"
+    },
+    {
+      "name": "Chaussure Richelieu Luxe Officer",
+      "sizes": [
+        "39",
+        "40",
+        "41",
+        "42",
+        "43",
+        "44"
+      ],
+      "colorVariants": [
+        {
+          "color": "Noir Verni",
+          "imageUrl": "https://noxa-whatsapp.vercel.app/images/luxe-officer-noir.jpg"
+        },
+        {
+          "color": "Marron Sombre",
+          "imageUrl": "https://noxa-whatsapp.vercel.app/images/luxe-officer-marron.jpg"
+        }
+      ],
+      "price": "28 000 FCFA"
+    },
+    {
+      "name": "Air Force One",
+      "sizes": [
+        "40",
+        "41",
+        "42",
+        "43",
+        "44",
+        "45"
+      ],
+      "colorVariants": [
+        {
+          "color": "Blanc/Bleu",
+          "imageUrl": "https://noxa-whatsapp.vercel.app/images/airforce-bleu.jpg"
+        },
+        {
+          "color": "Rouge/Noir",
+          "imageUrl": "https://noxa-whatsapp.vercel.app/images/airforce-rouge.jpg"
+        }
+      ],
+      "extraColors": [
+        "Blanc Pure",
+        "Noir"
+      ],
+      "price": "10 000 FCFA"
+    },
+    {
+      "name": "Samba",
+      "sizes": [
+        "38",
+        "39",
+        "40",
+        "41",
+        "42",
+        "43",
+        "44"
+      ],
+      "colorVariants": [
+        {
+          "color": "Blanc/Gris",
+          "imageUrl": "https://noxa-whatsapp.vercel.app/images/samba-gris.jpg"
+        },
+        {
+          "color": "Blanc/Bleu",
+          "imageUrl": "https://noxa-whatsapp.vercel.app/images/samba-bleu.jpg"
+        }
+      ],
+      "extraColors": [
+        "Vert"
+      ],
+      "price": "12 000 FCFA"
+    },
+    {
+      "name": "Chaussure de sport Taggat Yaram",
+      "sizes": [
+        "40",
+        "41",
+        "42",
+        "43",
+        "44",
+        "45"
+      ],
+      "colorVariants": [
+        {
+          "color": "Bleu",
+          "label": "Bleu (Modou LO)",
+          "imageUrl": "https://noxa-whatsapp.vercel.app/images/taggat-bleu.jpg"
+        },
+        {
+          "color": "Rouge/Noir",
+          "label": "Rouge/Noir (Balla GAYE 2)",
+          "imageUrl": "https://noxa-whatsapp.vercel.app/images/taggat-rouge.jpg"
+        }
+      ],
+      "extraColors": [
+        "Noir"
+      ],
+      "price": "20 000 FCFA"
+    }
+  ]
+}
