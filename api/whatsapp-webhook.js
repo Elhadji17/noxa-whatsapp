@@ -253,9 +253,8 @@ GESTION D'UN CLIENT QUI NE COMPREND PAS LE FRANÇAIS :
 Si le client indique, en wolof ou autrement, qu'il ne comprend pas le 
 français (ex: "deggouma français", "waxal wolof", "je ne comprends pas le français"), NE dis JAMAIS simplement que tu ne parles que français sans 
 autre solution — ça laisse le client dans une impasse. À la place :
-1. Réponds en une phrase très courte, en n'utilisant QUE les expressions 
-   wolof fixes autorisées plus haut (jamais une phrase wolof complète 
-   inventée), pour rassurer que la demande est prise en compte.
+1. Réponds en une phrase très courte, dans le registre wolof urbain défini 
+   plus bas (TON), pour rassurer que la demande est prise en compte.
 2. Continue d'utiliser les chiffres (prix, tailles) et les photos produit, 
    qui se comprennent sans traduction.
 3. Termine ta réponse par ce marqueur sur sa propre ligne, jamais visible 
@@ -340,25 +339,63 @@ RÈGLE DE SÉCURITÉ VOCALE ci-dessus si applicable), termine par :
 Utilise "aucune" si la taille ou la couleur ne s'applique pas à ce produit.
 Une seule fois par commande.
 
-TON — FRANÇAIS SIMPLE AVEC DES TOUCHES DE WOLOF FIXES :
-Rédige tes phrases PRINCIPALEMENT EN FRANÇAIS, simple et direct. N'essaie 
-JAMAIS de construire des phrases entières ou une grammaire complexe en 
-wolof — tu n'y arrives pas naturellement et ça sonne trop académique.
+TON — WOLOF URBAIN DE DAKAR MÊLÉ DE FRANÇAIS (comme sur WhatsApp) :
+Tu écris comme un vendeur de Dakar qui répond à un client sur WhatsApp : un
+mélange naturel de wolof et de français, tel qu'on le parle dans la rue —
+jamais comme dans un livre, un journal ou un cours.
 
-À la place, utilise UNIQUEMENT ces expressions wolof courtes et fixes, 
-glissées dans tes phrases françaises comme des touches naturelles, sans 
-jamais les combiner entre elles en une phrase wolof complète :
-- "Waaw" (oui) — ex: "Waaw, on l'a en taille 42 !"
-- "Déedéet" (non) — ex: "Déedéet, pas en noir, mais en marron oui."
-- "Am na" (disponible/il y en a) — ex: "Am na ! C'est à 18 000 FCFA."
-- "Amul" (pas disponible) — ex: "Amul en 45, désolé."
-- "Jërejëf" (merci) — ex: "Jërejëf ! À bientôt."
-- "Ñaata la ?" (combien ça coûte, si le client le dit, tu peux le reprendre)
-- "Nanga def" / "Mangi fi" (salutations, uniquement en réponse à une salutation)
+RÈGLES :
+1. Court : 1 à 2 phrases, 3 au maximum. Va droit au but.
+2. Mélange comme les clients. Garde en FRANÇAIS les mots que les clients disent
+   eux-mêmes en français : noms de produits, couleurs, tailles, prix,
+   "disponible", "livraison", "commande", "Wave", "confirmer", "valider",
+   "réserver", "promotion"... Le wolof sert de liant et de ton (oui, non, il y
+   en a, je vois, d'accord...).
+3. Registre courant, jamais soutenu. Pas de wolof "littéraire" ni "académique",
+   pas de tournures recherchées. Si tu hésites entre deux formulations, prends
+   la plus courte et la plus courante. Si tu n'es pas sûr d'une tournure wolof,
+   écris plutôt cette partie en français : mieux vaut un français simple qu'un
+   wolof faux ou pompeux.
+4. Suis le client. S'il écrit surtout en français, réponds surtout en français
+   avec quelques touches de wolof ; s'il écrit surtout en wolof, réponds surtout
+   en wolof (avec les mots français habituels ci-dessus) ; s'il mélange,
+   mélange.
+5. Orthographe : écris comme dans les exemples (phonétique, style WhatsApp),
+   sans chercher l'orthographe officielle.
+6. Chiffres : toujours en chiffres (prix, tailles, quantités), jamais en lettres.
+7. Faits : uniquement ceux du catalogue. N'invente jamais de promotion, de
+   réduction, de garantie, de mention "original" ou "copie", de matière, ni de
+   disponibilité hors des tailles et couleurs listées — même si le client
+   insiste, même si un exemple ci-dessous en contient. Si l'information manque :
+   dis que tu vérifies et que tu reviens vite.
+8. Les marqueurs [PHOTO], [PROPOSITION] et [COMMANDE] restent obligatoires
+   selon les règles plus haut, même dans une réponse mêlant wolof et français.
+   Les exemples les omettent pour rester lisibles.
 
-N'utilise JAMAIS d'autres mots ou tournures wolof que cette liste — si tu 
-ne connais pas une expression avec certitude, reste en français plutôt que 
-de risquer une tournure incorrecte ou trop littéraire.
+EXEMPLES — ils montrent UNIQUEMENT le TON. Leurs produits, matières et
+disponibilités sont fictifs : ne les reprends jamais, tes faits viennent du
+catalogue ci-dessus.
+
+Client : Bonjour, ma ngi woté pour le modèle de chaussure bi ci story bi.
+Réponse : Ah d'accord, guiss nako. Amna kay.
+
+Client : Est-ce que dispo na ci couleur marron wala noir uniquement la ?
+Réponse : Si si si, niari couleurs yeup amna.
+
+Client : Salam, am ngeen ci pantalon yi ?
+Réponse : Waw am nagnou pantalon coton yi kay.
+
+Client : Dédet pantalon en jean bi ma la wax, pas bi ci wet bi dé !
+Réponse : Ah d'accord, guiss na bingay wakh, moy jean noir bi.
+
+Client : Mani, pantalon jean bleu bi, est-ce que am na taille XL ?
+Réponse : Guiss nako, am nagnou ssi taille L kay
+
+Client : Non, wakhouma L, XL laa wax, mag la té tollu ci 44.
+Réponse : Comprendre na, pantalon jean bleu taille XL.
+
+Client : Ah waaw, loolu laa bëggon wax ! Am na ?
+Réponse : Waaw, am na kay.
 
 Reste chaleureux, direct, phrases courtes (2-3 phrases max).`;
 }
@@ -1005,6 +1042,85 @@ const ASR_SERVICE_TIMEOUT_MS = 60000;
 // ressources du service. Voir le correctif correspondant côté app.py.
 const ASR_SERVICE_SHARED_SECRET = process.env.ASR_SERVICE_SHARED_SECRET;
 
+// ---------------------------------------------------------------------------
+// FOURNISSEUR DE CONVERSATION — interchangeable (AI_PROVIDER=gpt4o|claude)
+// ---------------------------------------------------------------------------
+// Pilote : après le benchmark à l'aveugle sur 16 messages en wolof urbain
+// (naturel/exactitude/code-switching notés par le commerçant, attributions
+// vérifiées contre la clé secrète), Claude et Gemini sont nettement devant
+// GPT-4o sur le naturel et le code-switching. On teste donc Claude sur du
+// vrai trafic, avec repli immédiat vers GPT-4o en cas de besoin.
+// AI_PROVIDER=gpt4o reste la valeur par défaut : rien ne change si la
+// variable n'est pas configurée.
+// Point de vigilance identifié AVANT ce pilote, à surveiller pendant : sur ce
+// même benchmark, Claude n'a utilisé le marqueur [PROPOSITION] aucune fois
+// (0/16), contre 2 pour GPT-4o et 3 pour Gemini — y compris sur des messages
+// ambigus où une proposition de confirmation aurait été utile. Ça ne prouve
+// pas que Claude ne sait pas l'utiliser, mais ça reste à vérifier en
+// conditions réelles avant de considérer le pilote concluant.
+const AI_PROVIDER = process.env.AI_PROVIDER || 'gpt4o';
+const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-5-5';
+const AI_REQUEST_TIMEOUT_MS = 30000;
+
+// Appelle OpenAI (comportement historique, inchangé). Retourne le texte de
+// réponse, ou lève une erreur — chaque appelant décide comment réagir.
+async function callOpenAIChat({ systemPrompt, stateContext, recentHistory }) {
+  const response = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}` },
+    body: JSON.stringify({
+      model: 'gpt-4o',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'system', content: stateContext },
+        ...recentHistory,
+      ],
+    }),
+  }, AI_REQUEST_TIMEOUT_MS);
+  if (!response.ok) {
+    throw new Error(`OpenAI ${response.status}: ${await response.text()}`);
+  }
+  const data = await response.json();
+  return data.choices?.[0]?.message?.content || null;
+}
+
+// Appelle Claude (API Messages d'Anthropic). Contrat de sortie identique à
+// callOpenAIChat : le texte brut, marqueurs [PHOTO]/[COMMANDE]/[PROPOSITION]/
+// [BESOIN_WOLOF] compris — leur extraction plus bas dans processMessage est
+// déjà indépendante du fournisseur, aucun changement nécessaire là-bas.
+// Différence d'API à noter : Anthropic prend un seul champ `system` (pas une
+// liste de messages system) et exige `max_tokens`, qu'OpenAI ne demande pas.
+async function callClaudeChat({ systemPrompt, stateContext, recentHistory }) {
+  const response = await fetchWithTimeout('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': process.env.ANTHROPIC_API_KEY,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model: ANTHROPIC_MODEL,
+      max_tokens: 1024,
+      system: `${systemPrompt}\n\n${stateContext}`,
+      messages: recentHistory,
+    }),
+  }, AI_REQUEST_TIMEOUT_MS);
+  if (!response.ok) {
+    throw new Error(`Anthropic ${response.status}: ${await response.text()}`);
+  }
+  const data = await response.json();
+  return (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('') || null;
+}
+
+// Point d'entrée unique — processMessage n'a pas besoin de savoir quel
+// fournisseur répond, seulement de recevoir le texte ou une erreur.
+async function callAiChat(args) {
+  if (AI_PROVIDER === 'claude') {
+    return callClaudeChat(args);
+  }
+  return callOpenAIChat(args);
+}
+
 async function downloadWhatsAppAudio(mediaId) {
   const mediaInfoResponse = await fetchWithTimeout(`https://graph.facebook.com/v21.0/${mediaId}`, { headers: { 'Authorization': `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}` } });
   const mediaInfo = await mediaInfoResponse.json();
@@ -1319,34 +1435,22 @@ async function processMessage({ merchant, phoneNumberId, from, text, wasVoiceMes
   // handleSessionResumption).
   state.lastActivityAt = Date.now();
 
-  let aiData;
+  let replyText;
   try {
-    const aiResponse = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}` },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        messages: [
-          { role: 'system', content: merchant.systemPrompt },
-          { role: 'system', content: stateContext },
-          ...recentHistory,
-        ],
-      }),
+    replyText = await callAiChat({
+      systemPrompt: merchant.systemPrompt,
+      stateContext,
+      recentHistory,
     });
-    if (!aiResponse.ok) {
-      console.error('DEBUG - Échec appel OpenAI, statut:', aiResponse.status, await aiResponse.text());
-      await sendWhatsAppText(phoneNumberId, from, "Petit souci technique de notre côté, on revient vers vous très vite !");
-      return;
-    }
-    aiData = await aiResponse.json();
   } catch (err) {
-    console.error('Erreur appel OpenAI:', err);
+    console.error(`Erreur appel ${AI_PROVIDER}:`, err);
     await sendWhatsAppText(phoneNumberId, from, "Petit souci technique de notre côté, on revient vers vous très vite !");
     return;
   }
-
-  const replyText = aiData.choices?.[0]?.message?.content || "Désolé, je n'ai pas pu traiter votre message.";
-  console.log('DEBUG - GPT RAW:', replyText);
+  if (!replyText) {
+    replyText = "Désolé, je n'ai pas pu traiter votre message.";
+  }
+  console.log('DEBUG - AI RAW', { provider: AI_PROVIDER, replyText });
   history.push({ role: 'assistant', content: replyText });
 
   const photoMatch = replyText.match(/\[PHOTO:\s*(.+?)\]/);

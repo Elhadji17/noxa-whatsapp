@@ -92,12 +92,23 @@ def http_post_json(url, headers, payload, timeout=90):
         raise RuntimeError(f"Réseau: {e.reason}")
     except TimeoutError:
         raise RuntimeError("Réseau: délai dépassé")
+    except ConnectionError as e:
+        # Couvre notamment http.client.RemoteDisconnected ("Remote end closed
+        # connection without response") : observé en pratique, non couvert par
+        # URLError ni TimeoutError, donc jusqu'ici jamais réessayé.
+        raise RuntimeError(f"Réseau: connexion interrompue ({e})")
 
 
 # Codes qui valent la peine d'être retentés : limite de débit (429), surcharge
 # ou panne passagère du fournisseur. Les autres (401 clé refusée, 400 requête
 # invalide, 404 modèle inconnu) échouent tout de suite : réessayer ne sert à rien.
 CODES_RETRY = {408, 409, 429, 500, 502, 503, 504, 529}
+
+# Un 429 n'est pas toujours une limite de débit passagère : OpenAI renvoie le
+# même code HTTP pour un compte à court de crédit ("insufficient_quota"). Dans
+# ce cas, attendre et réessayer ne change jamais rien — inutile de faire
+# patienter la personne 90 secondes pour un échec garanti.
+CODES_QUOTA_EPUISEE = ("insufficient_quota", "RESOURCE_EXHAUSTED")
 
 
 def appeler_avec_retry(fonction, modele, system, user, essais=5, base=5.0):
@@ -108,6 +119,10 @@ def appeler_avec_retry(fonction, modele, system, user, essais=5, base=5.0):
         try:
             return fonction(modele, system, user)
         except HttpError as e:
+            if any(c in str(e) for c in CODES_QUOTA_EPUISEE):
+                # Quota épuisé, pas une limite de débit passagère : réessayer
+                # ne peut jamais réussir, autant échouer tout de suite.
+                raise
             if e.code not in CODES_RETRY or essai == essais:
                 raise
             attente = e.retry_after if e.retry_after else base * (2 ** (essai - 1))
@@ -392,6 +407,10 @@ def run(args):
         print("\nCauses des erreurs (regroupées ; le bras concerné n'est pas indiqué, pour ne pas fausser la notation) :")
         for msg, nb in causes.most_common():
             print(f"  {nb}x {msg}")
+        if any("insufficient_quota" in r["erreur"] or "RESOURCE_EXHAUSTED" in r["erreur"] for r in resultats):
+            print("\n⚠️  Au moins une erreur signale un compte à court de crédit (pas une simple limite de")
+            print("   débit). Si cette clé sert AUSSI en production, vérifie la facturation du fournisseur")
+            print("   concerné dès maintenant : la production pourrait être affectée en ce moment même.")
         print("Une feuille avec des trous n'est pas exploitable : corrige la cause puis relance dans un NOUVEAU dossier (--out-dir).")
 
 # ---------------------------------------------------------------------------
