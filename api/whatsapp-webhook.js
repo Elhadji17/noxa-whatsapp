@@ -294,6 +294,16 @@ critique confirmée après un message vocal doit systématiquement passer par
 une confirmation écrite explicite — un vocal, même limpide, ne suffit jamais 
 seul à confirmer une commande.
 
+Parfois, un message vocal est suivi d'une ligne commençant par
+« [AUTRE TRANSCRIPTION AUTOMATIQUE du même vocal, par un second système] ».
+Ce sont deux transcriptions du MÊME message, faites par deux systèmes
+différents qui se trompent à des endroits différents : aucune n'est présumée
+plus fiable. Croise-les pour comprendre ce que le client a voulu dire (un mot
+déformé dans l'une est parfois correct dans l'autre). Si elles divergent sur
+une information critique (produit, taille, couleur, prix), ou si tu hésites,
+demande une confirmation explicite : la règle ci-dessus ne change pas, un
+vocal ne suffit jamais à confirmer une commande.
+
 IMPORTANT : tant qu'une information critique n'est pas confirmée, ne dis 
 JAMAIS "je transmets votre commande" ni rien de similaire qui suggère que 
 c'est déjà fait. Dis plutôt clairement que tu as besoin d'une confirmation, 
@@ -860,8 +870,16 @@ async function handleSessionResumption({ merchant, phoneNumberId, from, text, st
   return false;
 }
 
+// Retire le marqueur vocal ET, s'il existe, le bloc de la seconde transcription (ASR_PROVIDER=dual) : tous les
+// détecteurs déterministes ne lisent ainsi que la transcription principale, exactement comme avant.
+function stripVoiceMarkers(rawText) {
+  return String(rawText)
+    .replace(/\s*\[AUTRE TRANSCRIPTION AUTOMATIQUE[^\]]*\][\s\S]*$/i, '')
+    .replace(/^\[MESSAGE VOCAL[^\]]*\]\s*/i, '');
+}
+
 function currentClientTextLower(rawText) {
-  return normalizeText(rawText.replace(/^\[MESSAGE VOCAL[^\]]*\]\s*/i, ''));
+  return normalizeText(stripVoiceMarkers(rawText));
 }
 
 function isShortAffirmative(rawText) {
@@ -946,7 +964,7 @@ async function notifyMerchantWolofNeed({ merchant, phoneNumberId, from, messageI
 
   // Le bot ne traite plus ce message lui-même : on transmet au commerçant ce
   // que le client a écrit, pour qu'il ait le contexte.
-  const citation = String(clientMessage || '').replace(/^\[MESSAGE VOCAL[^\]]*\]\s*/i, '').trim().slice(0, 200);
+  const citation = stripVoiceMarkers(String(clientMessage || '')).trim().slice(0, 200);
   const ligneCitation = citation ? `\nDernier message du client : « ${citation} »` : '';
 
   try {
@@ -1005,7 +1023,7 @@ async function sendWhatsAppImage(phoneNumberId, to, imageUrl, caption) {
 }
 
 // ---------------------------------------------------------------------------
-// ASR — fournisseur interchangeable (ASR_PROVIDER=whisper|xlsr|whosper)
+// ASR — fournisseur interchangeable (ASR_PROVIDER=whisper|xlsr|whosper|dual)
 // ---------------------------------------------------------------------------
 // Choix retenu après benchmark sur 52 vocaux réels (voir le classeur de
 // comparaison) : MMS-1B-all est exclu de ce fichier — licence CC-BY-NC-4.0,
@@ -1041,6 +1059,18 @@ const ASR_SERVICE_TIMEOUT_MS = 60000;
 // Whosper) — évite qu'un tiers découvrant l'URL Render puisse consommer les
 // ressources du service. Voir le correctif correspondant côté app.py.
 const ASR_SERVICE_SHARED_SECRET = process.env.ASR_SERVICE_SHARED_SECRET;
+
+// ASR_PROVIDER=dual : deux services ASR interrogés EN PARALLÈLE sur le même vocal.
+//   - XLSR_SERVICE_URL : le service XLS-R actuel (transcription « principale »)
+//   - NOXA_SERVICE_URL : le service du modèle ajusté NOXA (transcription « alternative »)
+// Mesuré sur UNE SEULE voix (29 vocaux, 37 champs critiques relus par Claude) : environ 67 % de champs justes avec les
+// deux transcriptions contre 31 % avec XLS-R seul. À confirmer sur d'autres voix : ne pas le tenir pour acquis.
+// La transcription principale (XLS-R) alimente SEULE tous les détecteurs déterministes (produit, taille, couleur, zone,
+// oui court, blocage linguistique), exactement comme avant ; la seconde n'est donnée qu'au modèle de conversation.
+// Chaque service peut avoir son propre secret (XLSR_SERVICE_SECRET, NOXA_SERVICE_SECRET) ; à défaut, le secret
+// partagé ci-dessus. Si l'un des deux échoue, l'autre sert seul ; si les deux échouent, repli Whisper-FR comme
+// d'habitude. Retour arrière immédiat : ASR_PROVIDER=xlsr. Le garde-fou « un vocal ne confirme jamais une commande »
+// est inchangé.
 
 // ---------------------------------------------------------------------------
 // FOURNISSEUR DE CONVERSATION — interchangeable (AI_PROVIDER=gpt4o|claude)
@@ -1148,7 +1178,7 @@ async function transcribeWithWhisperFR(audioBuffer) {
 // exactement le même contrat HTTP (voir mms-asr-service/app.py, réutilisable
 // tel quel pour XLS-R ; Whosper nécessite un service équivalent avec le
 // paquet `whosper` — non fourni ici, à construire sur le même modèle).
-async function transcribeViaExternalService(serviceUrl, audioBuffer, providerName) {
+async function transcribeViaExternalService(serviceUrl, audioBuffer, providerName, secret = ASR_SERVICE_SHARED_SECRET) {
   if (!serviceUrl) {
     console.error(`DEBUG - ${providerName}: URL de service non configurée (variable d'environnement manquante)`);
     return null;
@@ -1158,7 +1188,7 @@ async function transcribeViaExternalService(serviceUrl, audioBuffer, providerNam
   try {
     const response = await fetchWithTimeout(`${serviceUrl}/transcribe`, {
       method: 'POST',
-      headers: ASR_SERVICE_SHARED_SECRET ? { 'Authorization': `Bearer ${ASR_SERVICE_SHARED_SECRET}` } : {},
+      headers: secret ? { 'Authorization': `Bearer ${secret}` } : {},
       body: formData,
     }, ASR_SERVICE_TIMEOUT_MS);
     if (!response.ok) {
@@ -1174,7 +1204,11 @@ async function transcribeViaExternalService(serviceUrl, audioBuffer, providerNam
 }
 
 function transcribeWithXLSR(audioBuffer) {
-  return transcribeViaExternalService(process.env.XLSR_SERVICE_URL, audioBuffer, 'XLS-R');
+  return transcribeViaExternalService(process.env.XLSR_SERVICE_URL, audioBuffer, 'XLS-R', process.env.XLSR_SERVICE_SECRET || ASR_SERVICE_SHARED_SECRET);
+}
+
+function transcribeWithNoxa(audioBuffer) {
+  return transcribeViaExternalService(process.env.NOXA_SERVICE_URL, audioBuffer, 'NOXA', process.env.NOXA_SERVICE_SECRET || ASR_SERVICE_SHARED_SECRET);
 }
 
 function transcribeWithWhosper(audioBuffer) {
@@ -1189,10 +1223,34 @@ async function transcribeWhatsAppAudio(mediaId) {
   const audioBuffer = await downloadWhatsAppAudio(mediaId);
 
   let text = null;
+  let alternativeText = null;
   let provider = ASR_PROVIDER;
   let fallbackUsed = false;
 
-  if (ASR_PROVIDER === 'xlsr') {
+  if (ASR_PROVIDER === 'dual') {
+    // Les deux services travaillent en même temps : l'attente est celle du plus lent, pas la somme.
+    const chronometre = async (fn) => {
+      const debut = Date.now();
+      const value = await fn(audioBuffer);
+      return { value, ms: Date.now() - debut };
+    };
+    const [xlsr, noxa] = await Promise.all([chronometre(transcribeWithXLSR), chronometre(transcribeWithNoxa)]);
+    console.log('DEBUG - ASR DUAL', {
+      xlsrOk: !!xlsr.value, noxaOk: !!noxa.value, xlsrMs: xlsr.ms, noxaMs: noxa.ms,
+      agree: !!(xlsr.value && noxa.value) && normalizeText(xlsr.value) === normalizeText(noxa.value),
+    });
+    if (xlsr.value && noxa.value) {
+      text = xlsr.value;
+      alternativeText = noxa.value;
+      provider = 'xlsr+noxa';
+    } else if (xlsr.value) {
+      text = xlsr.value;
+      provider = 'xlsr';
+    } else if (noxa.value) {
+      text = noxa.value;
+      provider = 'noxa';
+    }
+  } else if (ASR_PROVIDER === 'xlsr') {
     text = await transcribeWithXLSR(audioBuffer);
   } else if (ASR_PROVIDER === 'whosper') {
     text = await transcribeWithWhosper(audioBuffer);
@@ -1211,9 +1269,17 @@ async function transcribeWhatsAppAudio(mediaId) {
     fallbackUsed = true;
   }
 
-  console.log('DEBUG - ASR RESULT', { requestedProvider: ASR_PROVIDER, actualProvider: provider, fallbackUsed, textLength: text?.length || 0 });
+  console.log('DEBUG - ASR RESULT', { requestedProvider: ASR_PROVIDER, actualProvider: provider, fallbackUsed, textLength: text?.length || 0, hasAlternative: !!alternativeText });
 
-  return { text, provider, fallbackUsed };
+  return { text, provider, fallbackUsed, alternativeText };
+}
+
+// Texte du message vocal tel que stocké dans l'historique et vu par le modèle de conversation. Sans seconde
+// transcription, EXACTEMENT le format d'avant. Avec elle, un second bloc balisé que stripVoiceMarkers() sait retirer.
+function formatVoiceMessage(asrResult) {
+  const principal = `[MESSAGE VOCAL - transcription potentiellement imparfaite, fournisseur=${asrResult.provider}${asrResult.fallbackUsed ? ' (repli)' : ''}] ${asrResult.text}`;
+  if (!asrResult.alternativeText) return principal;
+  return `${principal}\n[AUTRE TRANSCRIPTION AUTOMATIQUE du même vocal, par un second système] ${asrResult.alternativeText}`;
 }
 
 function formatNumbersForSpeech(text) {
@@ -1635,7 +1701,7 @@ async function handleIncomingMessage(body) {
         return;
       }
       wasVoiceMessage = true;
-      text = `[MESSAGE VOCAL - transcription potentiellement imparfaite, fournisseur=${asrResult.provider}${asrResult.fallbackUsed ? ' (repli)' : ''}] ${asrResult.text}`;
+      text = formatVoiceMessage(asrResult);
     }
     if (!text) return;
 
