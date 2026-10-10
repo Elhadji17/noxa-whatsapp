@@ -1,0 +1,38 @@
+id;fichier;champ;valeur_attendue;phrase_reference;transcription_A;transcription_B;jugement_A;jugement_B;commentaire
+1;conv9_tour5.ogg;prix;dix-sept mille;Total bi 17.000 FCFA la. Meun na fey par Wave ?;dàcor total bi di semmes do mën naa fa par weef;dàkoor totaal bi di sen mel dox man naa fae par wiir;non;non;prix non reconnu
+2;conv2_tour1.ogg;produit;mocassin;Salut, am ngeen mocassin yi ci page bi ?;ël yiy am ngeen mafa song ci paju;elu i am neen mafasen ci p;non;non;produit non reconnu
+3;conv7_tour4.ogg;taille;XL / quarante-quatre;Non, du L, XL laa wax, dafa mag té tollu ci 44.;noo wax ma ell egsi ell laa wax mag la te tolluci kaaraankàt;noo wax ma ell egsi ëll laa wax mag la te tollusi carankat;partiel;partiel;
+4;conv3_tour2.ogg;produit;veste;Waw veste noire bi la.;waaw véesu noar bi la;waaw vecu nor bi la;partiel;non;
+5;conv3_tour2.ogg;couleur;noir;Waw veste noire bi la.;waaw véesu noar bi la;waaw vecu nor bi la;partiel;non;
+6;conv2_tour5.ogg;prix;quinze mille;Waaw ma ngi confirmer commande bi, prix bi 15.000 la d'accord ?;waw maa ngi kon fir ma komànd bi piri bi kansmil la daa koot;waaw maa ngi con firma comand bi pri bi cismiin la dara coot;non;non;prix non reconnu
+7;conv9_tour4.ogg;zone;Mermoz;Combien la livraison pour Mermoz ?;komnala liibré sonpr man moom;koom na la liibe sampr ma moom;non;non;incompris
+8;conv10_tour5.ogg;taille;quarante-deux;Ma jël bleu bi ak noir bi, même pointure bi 42.;dacoore ma jël blë bi ag noar bi moy mempontiir bi carante;akoor ma jël ulë bi ag naar bi may mempam cuir bi ca ràndë;non;non;taille non reconnue
+9;conv10_tour5.ogg;couleur;bleu / noir;Ma jël bleu bi ak noir bi, même pointure bi 42.;dacoore ma jël blë bi ag noar bi moy mempontiir bi carante;akoor ma jël ulë bi ag naar bi may mempam cuir bi ca ràndë;partiel;partiel;
+10;conv9_tour3.ogg;zone;Mermoz;Mangi nekk Mermoz, meun ngen ma ko livrer aujourd'hui ?;ana maa ngi nekk mermos man gee nakka liiwréy oo roddu;ana maa ngi nekk mermos man geen ako liivr jodu;partiel;partiel;
+11;conv3_tour1.ogg;produit;veste;Salamaleikoum, da am ben veste boumay weur, am ngeen ko ?;solaa maani com ndaam benn fersu bu may wër am nganku;solaaman com ndaa benn fes bu may wéramgenk;non;non;produit non reconnu
+12;conv9_tour2.ogg;taille;quarante-trois;Taille 43 la beugue, couleur noire bi.;ay carant waala bc lr nt;ay karamt waala a kulóor nowat;non;non;produit et taille non reconnu
+13;conv9_tour2.ogg;couleur;noir;Taille 43 la beugue, couleur noire bi.;ay carant waala bc lr nt;ay karamt waala a kulóor nowat;non;non;produit et taille non reconnu
+14;conv7_tour2.ogg;produit;pantalon jean;Dédet pantalon en jean bi ma la wax, pas bi ci wet bi dé !;dége pantoono aa jiñ bi laa wax paabici wet bi de;dade pantono am jim bi la wax pabici wet bi de;non;non;produit non reconnu
+15;conv4_tour2.ogg;taille;quarante-deux;Taille 42 am na ci ?;daykaar a ndo am nas;taycar and am na c;non;non;taille non reconnue
+16;conv4_tour1.ogg;produit;basket;Salam, basket yi ngi fi ba légui ?;alam baseel yi ngi fi ba léegi;m basel yi nga fi ba léegi;non;non;produit non reconnu
+17;conv7_tour3.ogg;produit;pantalon jean;Mani, pantalon jean bleu bi, est-ce que am na taille XL ?;ma nñi pantalonc ciin bulo bi esc am nata csi el;mani pantalong ciin gulo bi ees ka am naata egsal;oui;oui;
+18;conv7_tour3.ogg;taille;XL;Mani, pantalon jean bleu bi, est-ce que am na taille XL ?;ma nñi pantalonc ciin bulo bi esc am nata csi el;mani pantalong ciin gulo bi ees ka am naata egsal;partiel;non;
+19;conv7_tour3.ogg;couleur;bleu;Mani, pantalon jean bleu bi, est-ce que am na taille XL ?;ma nñi pantalonc ciin bulo bi esc am nata csi el;mani pantalong ciin gulo bi ees ka am naata egsal;oui;non;
+20;conv4_tour4.ogg;zone;Parcelles Assainies;Meun ngeen ma ko livrer Parcelles Assainies ?;dàkkoor mai man ngiin ma ko liif ré parselasi na;dacoor mais man ngiin ma kow liivr parcelasi n;non;non;
+21;conv6_tour2.ogg;couleur;marron / noir;Est-ce que dispo na ci couleur marron wala noir uniquement la ?;eska gisponees ci kloo ma ronwala naax yu nit maala;esq dispone ciclo maronwala naax yu nig mala;non;non;
+22;conv2_tour2.ogg;produit;mocassin;Mocassin marron bi, am na pointure 44 ?;ma fa saxn maron bi am na ona cuur kaaramkat;mo fe se maron bi am na on ciir ca rañcat;non;non;
+23;conv2_tour2.ogg;taille;quarante-quatre;Mocassin marron bi, am na pointure 44 ?;ma fa saxn maron bi am na ona cuur kaaramkat;mo fe se maron bi am na on ciir ca rañcat;partiel;non;
+24;conv2_tour2.ogg;couleur;marron;Mocassin marron bi, am na pointure 44 ?;ma fa saxn maron bi am na ona cuur kaaramkat;mo fe se maron bi am na on ciir ca rañcat;oui;oui;
+25;conv4_tour5.ogg;zone;Unité 15;Livrer ma ko suba ci kanam, mangi Unité 15.;oker li free ma ko suba cig kanam maa ngi uñute kens;oks li frima o suba ci canaam maa ngi uñu teenc;partiel;non;
+26;conv9_tour1.ogg;produit;mocassin;Beugg naafa yeneen mocassin.;bëgg naa xa yénema casion;bëgg naa xa yeneen ma kason;non;non;
+27;conv6_tour1.ogg;produit;chaussure;Bonjour, ma ngi appeler pour le modèle de chaussure bi ci story bi.;may ngapp le polu ma delsir bisis tor yi bi;oo may ngàpp lei póllu ma deloo so siiru bisis toor yi;non;non;
+28;conv3_tour4.ogg;couleur;rouge;Finalement rouge bi la beugue, changel ma ko stp.;dokcoor finaament ruus bi la bëgg cangel ma ko siltëble;dokkoor finaal ma ruus bi la bëgg sangal ma ko siltëblu;partiel;partiel;
+29;conv1_tour4.ogg;couleur;bleu (à changer);Am ngen bennen couleur bu bokkul ak bleu bi ?;a ngeen bennenculot bu boppul aklëbi;a ngeen bennenkuloot bu bokkul ak  dóbi;non;non;
+30;conv5_tour1.ogg;produit;sac;Waaw salam, yo xam nga lu ma beug, am ngeen sac yi mafi guissone?;waawa solaam yoo xam nga lu mu bëgg am ngeen sag yi ma fi njisoon;waaw solaam yoo xam nga lu mu bëgg am ngen sag yi ma fi gisoon;oui;oui;
+31;conv1_tour2.ogg;produit;Ndakarou;Ndakarou bou bleu bi am na ?;waaw ndaka ruuble bi am na;waaw ndakaaru bubble bi am na;non;oui;
+32;conv1_tour2.ogg;couleur;bleu;Ndakarou bou bleu bi am na ?;waaw ndaka ruuble bi am na;waaw ndakaaru bubble bi am na;non;partiel;
+33;conv1_tour1.ogg;produit;chaussures;Waaw salam, am ngeen chaussures yi ?;waaw salaam am nen sosiir yi;waaw salaam am geen so siir yi;partiel;partiel;
+34;conv7_tour1.ogg;produit;pantalon;Salam, am ngeen ci pantalon yi ?;solaam am ngen cu mpat panon yi;solamam ngeen simpn anon yi;non;non;
+35;conv3_tour5.ogg;couleur;rouge;Rouge bi laa jël, ma ngi la koy confirmel.;waw ruuj bi laa jël maa ngi la koy kon firmaal;waaw ruuj bilaa jël maa ngi la koy confirment;oui;oui;
+36;conv1_tour5.ogg;couleur;noir;Noir bi nak, meun ngamako envoyer tamit ?;noar bi nag man ngoomako maw itam;noar bi nag mën ngooma ko ma w tem;oui;oui;
+37;conv3_tour3.ogg;couleur;rouge;Ah attends... rouge bi mom am na ?;aa atam róogi wu moomu am na;aaatan rooji bu moom am na;partiel;partiel;

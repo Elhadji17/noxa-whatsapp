@@ -1,0 +1,38 @@
+fichier	champ	valeur_attendue	reference_complete	hypothese_asr	wer_segment	recuperable	commentaire
+conv1_tour1.ogg	produit	chaussures	Waaw salam, am ngeen chaussures yi ?	waaw salaam am geen so siir yi	0.6667	oui	
+conv1_tour2.ogg	produit	Ndakarou	Ndakarou bou bleu bi am na ?	waaw ndakaaru bubble bi am na	0.5000	oui	
+conv1_tour2.ogg	couleur	bleu	Ndakarou bou bleu bi am na ?	waaw ndakaaru bubble bi am na	0.5000	oui	
+conv1_tour4.ogg	couleur	bleu (à changer)	Am ngen bennen couleur bu bokkul ak bleu bi ?	a ngeen bennenkuloot bu bokkul ak  dóbi	0.6667	partiel	
+conv1_tour5.ogg	couleur	noir	Noir bi nak, meun ngamako envoyer tamit ?	noar bi nag man ngoomako maw itam	0.8571	partiel	
+conv2_tour1.ogg	produit	mocassin	Salut, am ngeen mocassin yi ci page bi ?	ël yiy am ngeen mafa song ci paju	0.7500	non	
+conv2_tour2.ogg	produit	mocassin	Mocassin marron bi, am na pointure 44 ?	ma fa saxn maron bi am na ona cuur kaaramkat	1.0000	non	
+conv2_tour2.ogg	taille	quarante-quatre	Mocassin marron bi, am na pointure 44 ?	ma fa saxn maron bi am na ona cuur kaaramkat	1.0000	non	
+conv2_tour2.ogg	couleur	marron	Mocassin marron bi, am na pointure 44 ?	ma fa saxn maron bi am na ona cuur kaaramkat	1.0000	non	
+conv2_tour5.ogg	prix	quinze mille	Waaw ma ngi confirmer commande bi, prix bi 15.000 la d'accord ?	waw maa ngi kon fir ma komànd bi piri bi kansmil la daa koot	0.9167	partiel	
+conv3_tour1.ogg	produit	veste	Salamaleikoum, da am ben veste boumay weur, am ngeen ko ?	solaa maani com ndaam benn fersu bu may wër am nganku	1.1000	non	
+conv3_tour2.ogg	produit	veste	Waw veste noire bi la.	waaw véesu noar bi la	0.6000	partiel	
+conv3_tour2.ogg	couleur	noir	Waw veste noire bi la.	waaw véesu noar bi la	0.6000	partiel	
+conv3_tour3.ogg	couleur	rouge	Ah attends... rouge bi mom am na ?	aa atam róogi wu moomu am na	0.7143	partiel	
+conv3_tour4.ogg	couleur	rouge	Finalement rouge bi la beugue, changel ma ko stp.	dokkoor finaal ma ruus bi la bëgg sangal ma ko siltëblu	0.7778	oui	
+conv3_tour5.ogg	couleur	rouge	Rouge bi laa jël, ma ngi la koy confirmel.	waw ruuj bi laa jël maa ngi la koy kon firmaal	0.5556	oui	
+conv4_tour1.ogg	produit	basket	Salam, basket yi ngi fi ba légui ?	alam baseel yi ngi fi ba léegi	0.4286	partiel	
+conv4_tour2.ogg	taille	quarante-deux	Taille 42 am na ci ?	daykaar a ndo am nas	1.0000	non	
+conv4_tour4.ogg	zone	Parcelles Assainies	Meun ngeen ma ko livrer Parcelles Assainies ?	dàkkoor mai man ngiin ma ko liif ré parselasi na	1.1429	non	
+conv4_tour5.ogg	zone	Unité 15	Livrer ma ko suba ci kanam, mangi Unité 15.	oker li free ma ko suba cig kanam maa ngi uñute kens	0.8889	partiel	
+conv5_tour1.ogg	produit	sac	Waaw salam, yo xam nga lu ma beug, am ngeen sac yi mafi guissone?	waaw solaam yoo xam nga lu mu bëgg am ngen sag yi ma fi gisoon	0.6429	oui	
+conv6_tour1.ogg	produit	chaussure	Bonjour, ma ngi appeler pour le modèle de chaussure bi ci story bi.	oo may ngàpp lei póllu ma deloo so siiru bisis toor yi	1.0000	partiel	
+conv6_tour2.ogg	couleur	marron / noir	Est-ce que dispo na ci couleur marron wala noir uniquement la ?	eska gisponees ci kloo ma ronwala naax yu nit maala	1.0000	non	
+conv7_tour1.ogg	produit	pantalon	Salam, am ngeen ci pantalon yi ?	solaam am ngen cu mpat panon yi	0.8333	non	
+conv7_tour2.ogg	produit	pantalon jean	Dédet pantalon en jean bi ma la wax, pas bi ci wet bi dé !	dége pantoono aa jiñ bi laa wax paabici wet bi de	0.7143	partiel	
+conv7_tour3.ogg	produit	pantalon jean	Mani, pantalon jean bleu bi, est-ce que am na taille XL ?	mani pantalong ciin gulo bi ees ka am naata egsal	0.7500	partiel	
+conv7_tour3.ogg	taille	XL	Mani, pantalon jean bleu bi, est-ce que am na taille XL ?	mani pantalong ciin gulo bi ees ka am naata egsal	0.7500	partiel	
+conv7_tour3.ogg	couleur	bleu	Mani, pantalon jean bleu bi, est-ce que am na taille XL ?	mani pantalong ciin gulo bi ees ka am naata egsal	0.7500	partiel	
+conv7_tour4.ogg	taille	XL / quarante-quatre	Non, du L, XL laa wax, dafa mag té tollu ci 44.	noo wax ma ell egsi ell laa wax mag la te tolluci kaaraankàt	0.9167	oui	
+conv9_tour1.ogg	produit	mocassin	Beugg naafa yeneen mocassin.	bëgg naa xa yeneen ma kason	1.2500	non	
+conv9_tour2.ogg	taille	quarante-trois	Taille 43 la beugue, couleur noire bi.	ay karamt waala a kulóor nowat	1.0000	non	
+conv9_tour2.ogg	couleur	noir	Taille 43 la beugue, couleur noire bi.	ay karamt waala a kulóor nowat	1.0000	non	
+conv9_tour3.ogg	zone	Mermoz	Mangi nekk Mermoz, meun ngen ma ko livrer aujourd'hui ?	ana maa ngi nekk mermos man gee nakka liiwréy oo roddu	1.1111	partiel	
+conv9_tour4.ogg	zone	Mermoz	Combien la livraison pour Mermoz ?	koom na la liibe sampr ma moom	1.2000	non	
+conv9_tour5.ogg	prix	dix-sept mille	Total bi 17.000 FCFA la. Meun na fey par Wave ?	dàkoor totaal bi di sen mel dox man naa fae par wiir	0.9091	non	
+conv10_tour5.ogg	taille	quarante-deux	Ma jël bleu bi ak noir bi, même pointure bi 42.	akoor ma jël ulë bi ag naar bi may mempam cuir bi ca ràndë	0.8182	non	
+conv10_tour5.ogg	couleur	bleu / noir	Ma jël bleu bi ak noir bi, même pointure bi 42.	akoor ma jël ulë bi ag naar bi may mempam cuir bi ca ràndë	0.8182	non	
