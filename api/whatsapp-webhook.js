@@ -1071,6 +1071,11 @@ const ASR_SERVICE_SHARED_SECRET = process.env.ASR_SERVICE_SHARED_SECRET;
 // partagé ci-dessus. Si l'un des deux échoue, l'autre sert seul ; si les deux échouent, repli Whisper-FR comme
 // d'habitude. Retour arrière immédiat : ASR_PROVIDER=xlsr. Le garde-fou « un vocal ne confirme jamais une commande »
 // est inchangé.
+//
+// Journalisation des transcriptions en mode dual : activée par défaut (ASR_LOG_TRANSCRIPTS=0 pour la couper), parce
+// qu'on ne peut pas juger un second modèle sans voir ce qu'il a écrit. Le webhook journalise déjà le texte de chaque
+// message client (« currentText ») : ce n'est pas une nouvelle catégorie de donnée.
+const ASR_LOG_TRANSCRIPTS = process.env.ASR_LOG_TRANSCRIPTS !== '0';
 
 // ---------------------------------------------------------------------------
 // FOURNISSEUR DE CONVERSATION — interchangeable (AI_PROVIDER=gpt4o|claude)
@@ -1220,7 +1225,12 @@ function transcribeWithWhosper(audioBuffer) {
 // interpréter les logs et ne pas croire, à tort, qu'un fournisseur "rapide"
 // a répondu alors que c'est le repli Whisper-FR qui a pris le relais.
 async function transcribeWhatsAppAudio(mediaId) {
+  // Deux chronomètres séparés : sur un vocal de test, « téléchargement + ASR » a pris de 9 à 46 s sans qu'on puisse dire
+  // si c'était WhatsApp ou le service ASR.
+  const downloadStart = Date.now();
   const audioBuffer = await downloadWhatsAppAudio(mediaId);
+  const downloadMs = Date.now() - downloadStart;
+  const asrStart = Date.now();
 
   let text = null;
   let alternativeText = null;
@@ -1238,6 +1248,7 @@ async function transcribeWhatsAppAudio(mediaId) {
     console.log('DEBUG - ASR DUAL', {
       xlsrOk: !!xlsr.value, noxaOk: !!noxa.value, xlsrMs: xlsr.ms, noxaMs: noxa.ms,
       agree: !!(xlsr.value && noxa.value) && normalizeText(xlsr.value) === normalizeText(noxa.value),
+      ...(ASR_LOG_TRANSCRIPTS ? { xlsrText: xlsr.value, noxaText: noxa.value } : {}),
     });
     if (xlsr.value && noxa.value) {
       text = xlsr.value;
@@ -1269,7 +1280,7 @@ async function transcribeWhatsAppAudio(mediaId) {
     fallbackUsed = true;
   }
 
-  console.log('DEBUG - ASR RESULT', { requestedProvider: ASR_PROVIDER, actualProvider: provider, fallbackUsed, textLength: text?.length || 0, hasAlternative: !!alternativeText });
+  console.log('DEBUG - ASR RESULT', { requestedProvider: ASR_PROVIDER, actualProvider: provider, fallbackUsed, textLength: text?.length || 0, hasAlternative: !!alternativeText, downloadMs, asrMs: Date.now() - asrStart });
 
   return { text, provider, fallbackUsed, alternativeText };
 }
