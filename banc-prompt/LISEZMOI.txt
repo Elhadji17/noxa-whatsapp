@@ -1,0 +1,82 @@
+BANC D'ESSAI DE PROMPTS — NOXA
+==============================
+
+Il fait répondre Claude avec plusieurs versions du prompt de ton webhook, sur les mêmes messages (55 aujourd'hui), dans les mêmes
+conditions que la production (prompt + contexte d'état + 10 derniers tours, max_tokens 1024, aucune température).
+Puis il note les réponses et te prépare une relecture à l'aveugle.
+
+CONTENU DU DOSSIER
+  banc_prompt.py        le banc (Python 3.8+, aucune bibliothèque à installer)
+  messages_test.csv     les 41 messages de test, avec ce qu'on attend de chacun  ->  TU PEUX ET TU DOIS LE CORRIGER
+  prompts/A_actuel.txt          le prompt de ton webhook v5, tel qu'il est construit en mode dual (exporté par le code)
+  prompts/B_correctif_langue.txt  A + mon correctif de langue d'avant-hier (règle 4 + 4 exemples en français)
+  prompts/C_restructure.txt     brouillon d'une version restructurée  ->  TU PEUX ET TU DOIS LE CORRIGER
+  prompts/C2_exemples_elhadji.txt  C + un bloc de langue qui exige du vrai wolof pour un client wolof + TES six réponses comme exemples
+  exporter_prompt.mjs   sort en texte le prompt RÉEL de ton webhook (voir plus bas)
+
+CE QUE CHAQUE VARIANTE CHANGE
+  A  rien : c'est le point de comparaison.
+  B  règle « suis la langue du client » renforcée (français → français, vocal illisible → français) + exemples en français.
+  C  toute la politique de langue regroupée dans UN bloc placé tout en haut (« LANGUE ET TON — RÈGLE PRIORITAIRE ») ;
+     l'ancienne section TON est réduite aux règles qui n'ont rien à voir avec la langue ; 8 exemples équilibrés
+     (3 en français, 3 mélangés, 2 en wolof) qui font avancer la vente (prix, zone, Wave) au lieu de répondre « oui il y en a ».
+     Les 9 847 caractères de règles opérationnelles (commande, marqueurs, sécurité vocale, blocage linguistique) sont
+     IDENTIQUES à A, sauf une référence (« plus bas (TON) » devenue « plus haut (LANGUE ET TON) »).
+
+MESSAGES CONTAMINÉS : EXCLUS AUTOMATIQUEMENT
+  Si le texte d'un message figure déjà comme exemple « Client : … » dans un prompt comparé, ce message est écarté du banc (il serait de la
+  triche de tester un prompt sur une phrase dont il connaît déjà la réponse). Le script les liste au lancement et le rapport le rappelle.
+  Pour tester malgré tout : --inclure-contamines (déconseillé). Quand tu ajoutes des exemples à un prompt, ajoute aussi des messages INÉDITS.
+  Les messages N01 à N14 sont inédits pour les quatre prompts (phrases tirées de tes enregistrements, jamais utilisées comme exemples).
+
+LANCER (invite de commandes, dans ce dossier)
+  1. set ANTHROPIC_API_KEY=sk-ant-...                      (ne la colle jamais dans une conversation)
+  2. python banc_prompt.py lancer --variantes C_restructure,C2_exemples_elhadji   compare C et C2 sur des messages que ni l'un ni l'autre n'a vus en exemple
+     python banc_prompt.py lancer --limite 6 --repetitions 1     petit essai : 18 appels, environ 0,2 $ si ton tarif est proche de 3 $ le million de tokens
+  3. python banc_prompt.py lancer                          lancement complet : 246 appels, environ 1 million de tokens d'entrée
+                                                           (environ 3 $ à ce même tarif ; le tarif réel n'est PAS vérifié : le script affiche le volume avant de demander confirmation)
+  Option : --juge ajoute un second avis automatique (Claude juge la langue, la progression de la vente, les faits inventés).
+
+LIRE LES RÉSULTATS (dossier resultats/)
+  rapport.txt           vue d'ensemble par variante, langue de la réponse selon la langue du client, résultats par catégorie,
+                        comparaisons deux à deux (test des signes), liste des échecs à regarder
+  resultats.csv         une ligne par réponse, avec toutes les mesures (s'ouvre dans Excel)
+  feuille_aveugle.csv   des réponses SANS le nom de la variante : remplis « langue_ok (o/n) », « avance_vente (o/n) »,
+                        « naturel (1-5) » et « commentaire ». C'est la seule mesure qui juge le NATUREL du wolof.
+  cle_secrete.csv       qui est qui : n'ouvre pas ce fichier avant d'avoir noté
+  Quand tu as rempli la feuille :   python banc_prompt.py noter
+
+CE QUE TU DOIS CORRIGER
+  - messages_test.csv : colonnes « attendu » (lecture humaine), « doit_un_de » (un de ces mots doit apparaître, séparés par |),
+    « interdit », « marqueur_attendu », « marqueur_interdit ». Les « etat » (état de la commande) sont mes approximations de ce que
+    ton code déterministe poserait avant l'appel : corrige-les si tu sais que c'est différent. Ajoute tes vrais messages de clients.
+  - prompts/C_restructure.txt : j'ai volontairement limité mon wolof aux expressions sûres (Waaw, Déedéet, Am na, Amul, Jërejëf,
+    « Ban ... ngeen bëgg ? » et tes propres tournures). Corrige et enrichis les exemples mixtes et wolof.
+  - la détection de langue et la règle de conformité (listes de mots, seuils et table ACCEPTE en haut de banc_prompt.py). Elles ont été
+    CALIBRÉES sur ta relecture à l'aveugle du 11 oct. (32 lignes sur 36 d'accord avec ton jugement, contre 21 avec la règle initiale) :
+    un client « mixte » ou « wolof » n'accepte qu'une réponse principalement en wolof, un client « fr » ou un vocal « illisible »
+    qu'une réponse en français. À chaque « noter », le banc recalcule cet accord et liste les lignes où il diffère de toi : s'il
+    baisse, la règle ne reflète plus ton critère. « python banc_prompt.py verifier-langue » montre comment des exemples sont classés.
+
+AJOUTER UNE VARIANTE, OU TESTER LE PROMPT RÉEL DE TON WEBHOOK
+  - Dépose simplement un fichier .txt dans prompts/ : son nom devient celui de la variante. Modifier un prompt ne refait que les
+    appels de CE prompt (le reste est en cache).
+  - Pour sortir le prompt réel du webhook (depuis la racine de ton dépôt, là où se trouve node_modules) :
+        node exporter_prompt.mjs api/whatsapp-webhook.js "AD Shoes" > prompts/A_actuel.txt
+    Pour inclure la consigne « deux transcriptions » comme en production :
+        set ASR_PROVIDER=dual
+        node exporter_prompt.mjs api/whatsapp-webhook.js "AD Shoes" > prompts/A_actuel.txt
+    L'outil travaille sur une copie temporaire (toujours supprimée) : ton fichier n'est jamais modifié.
+  - Les prompts de ce dossier contiennent le numéro Wave d'AD Shoes (il est envoyé à l'API comme en production) : garde-le en tête
+    si tu partages ces fichiers.
+
+LIMITES
+  - La langue d'une réponse est estimée avec de petites listes de mots. Les cas limites (français avec trois mots de wolof entre
+    guillemets, par exemple) sont ambigus même pour un humain. La calibration repose sur 36 lignes (12 messages) relues par une seule
+    personne, et a été ajustée sur ces mêmes lignes : l'accord réel sur de nouveaux messages sera probablement un peu plus faible.
+  - Le banc ne juge ni le naturel ni l'exactitude du wolof : seule ta relecture à l'aveugle le fait.
+  - 41 messages, c'est peu. Un écart de quelques messages n'est pas une preuve : regarde p dans le rapport, et lis les échecs.
+  - Claude répond sans température fixée (comme en production) : deux lancements donnent des réponses légèrement différentes,
+    d'où les 2 répétitions par défaut.
+  - Les chiffres hors catalogue sont détectés (montants de 1 000 ou plus absents du catalogue et de ses sommes prix + livraison),
+    mais un total légitime de plusieurs articles serait signalé à tort : lis la réponse avant de conclure.

@@ -190,11 +190,92 @@ function buildDeliveryText(deliveryZones) {
   return deliveryZones.map(dz => `${dz.zones.join('/')} : ${dz.price} FCFA`).join(', ');
 }
 
+// Consigne ajoutée au prompt UNIQUEMENT en mode ASR_PROVIDER=dual : dans tous les autres modes, le prompt reste
+// identique à l'original, octet pour octet. Les prompts des marchands sont construits UNE FOIS, au chargement du fichier
+// (voir plus bas) : la condition lit donc directement l'environnement, avec la même règle que ASR_PROVIDER
+// (valeur || 'whisper'), car cette constante n'est déclarée que bien après.
+const DUAL_ASR_PROMPT = (process.env.ASR_PROVIDER || 'whisper') !== 'dual' ? '' : `Parfois, un message vocal est suivi d'une ligne commençant par
+« [AUTRE TRANSCRIPTION AUTOMATIQUE du même vocal, par un second système] ».
+Ce sont deux transcriptions du MÊME message, faites par deux systèmes
+différents qui se trompent à des endroits différents : aucune n'est présumée
+plus fiable. Croise-les pour comprendre ce que le client a voulu dire (un mot
+déformé dans l'une est parfois correct dans l'autre). Si elles divergent sur
+une information critique (produit, taille, couleur, prix), ou si tu hésites,
+demande une confirmation explicite : la règle ci-dessus ne change pas, un
+vocal ne suffit jamais à confirmer une commande. Les deux transcriptions
+peuvent aussi n'être que du bruit : si aucune ne contient un mot reconnaissable
+lié à un produit, une couleur, une taille ou une zone (c'est le cas d'une
+simple salutation comme « bonsoir »), ne propose AUCUNE valeur et demande
+simplement au client d'écrire ou de répéter.
+
+`;
+
+// ---------------------------------------------------------------------------------------------------------------
+// VARIANTE DE PROMPT « c2 » (interrupteur PROMPT_VARIANT=c2). Éteint par défaut : le prompt reste IDENTIQUE à l'actuel, octet
+// pour octet. Allumé, il remplace la politique de langue et les exemples par ceux du banc d'essai (prompt « C2 »), et
+// UNIQUEMENT pour les marchands qui ont leurs propres exemples (champ promptExamples) : un marchand sans exemples garde son
+// prompt actuel, car C2 n'a été mesuré qu'avec les exemples d'AD Shoes (leurs faits ne valent pas pour un autre marchand).
+// Les prompts sont construits UNE FOIS au chargement du fichier : changer la variable demande un redéploiement.
+// Retour en arrière : supprimer PROMPT_VARIANT (ou la vider) puis redéployer.
+// ---------------------------------------------------------------------------------------------------------------
+const PROMPT_VARIANT = (process.env.PROMPT_VARIANT || '').trim().toLowerCase();
+if (PROMPT_VARIANT && PROMPT_VARIANT !== 'c2') {
+  console.warn(`PROMPT_VARIANT=${PROMPT_VARIANT} inconnue : ignorée (seule « c2 » existe), le prompt actuel est conservé.`);
+}
+
+const C2_LANGUE_BLOCK = `LANGUE ET TON (RÈGLE PRIORITAIRE) :
+Tu réponds dans la langue du client, comme un vendeur de Dakar sur WhatsApp :
+naturel, court, jamais comme dans un livre ou un journal.
+- Le client écrit en FRANÇAIS (même court, même avec un ou deux mots de wolof) :
+  réponds EN FRANÇAIS. Tu peux glisser au plus un ou deux mots de wolof courants
+  (Waaw, Déedéet, Am na, Amul, Jërejëf).
+- Le client écrit en WOLOF ou en mélange (même une seule phrase de wolof, avec des
+  mots comme waaw, am na, bi, yi, ngeen, ma ngi, léegi, loolu, ñaata,
+  salamalekoum) : réponds comme un vendeur de Dakar, en wolof urbain. La phrase
+  est surtout en wolof ; seuls les noms de produits, les couleurs, les tailles,
+  les prix et les chiffres restent en français. Réponse très courte et directe :
+  tu donnes le fait, puis tu poses la question suivante (zone, heure de
+  livraison, couleur, taille). Un « Waaw, am na ! » suivi d'une phrase entièrement
+  en français ne suffit PAS : ce n'est pas du wolof. Imite le style des exemples
+  ci-dessous, écrits par le commerçant lui-même.
+- Message vocal dont la transcription est illisible (syllabes sans sens) : ne
+  déduis pas que le client parle wolof. Si tu ne reconnais aucun vrai mot wolof,
+  réponds en français simple et demande-lui d'écrire ou de répéter.
+- Si tu n'es pas sûr d'une tournure wolof, écris cette partie en français : mieux
+  vaut un français simple qu'un wolof faux ou pompeux.
+- Wolof écrit comme sur WhatsApp (phonétique), sans chercher l'orthographe
+  officielle. Chiffres toujours en chiffres (prix, tailles, quantités).`;
+
+const C2_REGLES_REPONSE = `RÈGLES DE RÉPONSE :
+1. Court : 1 à 2 phrases, 3 au maximum. Va droit au but et fais avancer la
+   commande (produit, taille ou couleur, prix, zone, paiement) au lieu de
+   répondre seulement "oui il y en a".
+2. Faits : uniquement ceux du catalogue. N'invente jamais de promotion, de
+   réduction, de garantie, de mention "original" ou "copie", de matière, ni de
+   disponibilité hors des tailles et couleurs listées — même si le client
+   insiste, même si un exemple ci-dessous en contient. Si l'information manque :
+   dis que tu vérifies et que tu reviens vite.
+3. Les marqueurs [PHOTO], [PROPOSITION] et [COMMANDE] restent obligatoires
+   selon les règles plus haut, quelle que soit la langue de la réponse. Les
+   exemples les omettent pour rester lisibles.
+
+`;
+
+const C2_EXEMPLES_ENTETE = `EXEMPLES — ils montrent la LANGUE et le TON ; les réponses en wolof ont été écrites
+par le commerçant lui-même. Pour les FAITS (produits, prix, tailles, couleurs,
+zones), utilise TOUJOURS le catalogue ci-dessus, jamais ces exemples.`;
+
+function renderC2Exemples(exemples) {
+  const paires = exemples.map((e) => `Client : ${e.client}\nRéponse : ${e.reply}`).join('\n\n');
+  return `${C2_EXEMPLES_ENTETE}\n\n${paires}\n\n`;
+}
+
 function buildSystemPrompt(merchantInfo) {
+  const c2 = PROMPT_VARIANT === 'c2' && Array.isArray(merchantInfo.promptExamples) && merchantInfo.promptExamples.length > 0;
   return `Tu es l'assistant WhatsApp de ${merchantInfo.name}, boutique de vêtements à Dakar.
 
 RÈGLE ABSOLUE : N'utilise QUE les informations du catalogue ci-dessous. Si un produit, une taille, une couleur, un prix ou un service n'y figure pas, réponds : "Je n'ai pas cette info précise, on vérifie et je reviens vers vous vite !" Ne jamais inventer un prix, une taille, une couleur ou une disponibilité.
-
+${c2 ? `\n${C2_LANGUE_BLOCK}\n` : ''}
 PRODUITS :
 ${buildProductListText(merchantInfo.products)}
 
@@ -254,7 +335,7 @@ Si le client indique, en wolof ou autrement, qu'il ne comprend pas le
 français (ex: "deggouma français", "waxal wolof", "je ne comprends pas le français"), NE dis JAMAIS simplement que tu ne parles que français sans 
 autre solution — ça laisse le client dans une impasse. À la place :
 1. Réponds en une phrase très courte, dans le registre wolof urbain défini 
-   plus bas (TON), pour rassurer que la demande est prise en compte.
+   ${c2 ? 'plus haut (LANGUE ET TON)' : 'plus bas (TON)'}, pour rassurer que la demande est prise en compte.
 2. Continue d'utiliser les chiffres (prix, tailles) et les photos produit, 
    qui se comprennent sans traduction.
 3. Termine ta réponse par ce marqueur sur sa propre ligne, jamais visible 
@@ -294,17 +375,7 @@ critique confirmée après un message vocal doit systématiquement passer par
 une confirmation écrite explicite — un vocal, même limpide, ne suffit jamais 
 seul à confirmer une commande.
 
-Parfois, un message vocal est suivi d'une ligne commençant par
-« [AUTRE TRANSCRIPTION AUTOMATIQUE du même vocal, par un second système] ».
-Ce sont deux transcriptions du MÊME message, faites par deux systèmes
-différents qui se trompent à des endroits différents : aucune n'est présumée
-plus fiable. Croise-les pour comprendre ce que le client a voulu dire (un mot
-déformé dans l'une est parfois correct dans l'autre). Si elles divergent sur
-une information critique (produit, taille, couleur, prix), ou si tu hésites,
-demande une confirmation explicite : la règle ci-dessus ne change pas, un
-vocal ne suffit jamais à confirmer une commande.
-
-IMPORTANT : tant qu'une information critique n'est pas confirmée, ne dis 
+${DUAL_ASR_PROMPT}IMPORTANT : tant qu'une information critique n'est pas confirmée, ne dis 
 JAMAIS "je transmets votre commande" ni rien de similaire qui suggère que 
 c'est déjà fait. Dis plutôt clairement que tu as besoin d'une confirmation, 
 par exemple : "Pouvez-vous confirmer pour que je transmette votre commande ?"
@@ -349,7 +420,7 @@ RÈGLE DE SÉCURITÉ VOCALE ci-dessus si applicable), termine par :
 Utilise "aucune" si la taille ou la couleur ne s'applique pas à ce produit.
 Une seule fois par commande.
 
-TON — WOLOF URBAIN DE DAKAR MÊLÉ DE FRANÇAIS (comme sur WhatsApp) :
+${c2 ? C2_REGLES_REPONSE + renderC2Exemples(merchantInfo.promptExamples) : `TON — WOLOF URBAIN DE DAKAR MÊLÉ DE FRANÇAIS (comme sur WhatsApp) :
 Tu écris comme un vendeur de Dakar qui répond à un client sur WhatsApp : un
 mélange naturel de wolof et de français, tel qu'on le parle dans la rue —
 jamais comme dans un livre, un journal ou un cours.
@@ -407,7 +478,7 @@ Réponse : Comprendre na, pantalon jean bleu taille XL.
 Client : Ah waaw, loolu laa bëggon wax ! Am na ?
 Réponse : Waaw, am na kay.
 
-Reste chaleureux, direct, phrases courtes (2-3 phrases max).`;
+`}Reste chaleureux, direct, phrases courtes (2-3 phrases max).`;
 }
 
 function normalizeText(value) {
@@ -602,6 +673,19 @@ const MERCHANTS = {
       { zones: ["Rufisque", "Bargny"], price: 3000 },
     ],
     hours: "Lundi-Samedi 9h-20h30 (non-stop), Dimanche 15h-20h",
+    // Exemples de langue et de ton, utilisés SEULEMENT si PROMPT_VARIANT=c2. Les réponses en wolof ont été écrites par le
+    // commerçant lui-même (Elhadji), avec son orthographe. Les faits (prix, couleurs...) viennent toujours du catalogue.
+    promptExamples: [
+      { client: "Bonjour, vous avez des sandales ?", reply: "Bonjour ! Waaw, on en a. Vous les voulez en quelle pointure ?" },
+      { client: "Je voudrais une taille 41, en marron.", reply: "D'accord, taille 41 en marron. Dites-moi dans quel quartier vous êtes, je vous donne le prix de la livraison." },
+      { client: "Merci, je vais en parler à ma femme.", reply: "Jërejëf ! Prenez votre temps, on reste disponible." },
+      { client: "Mocassin marron bi, am na pointure 44 ?", reply: "Waaw Moccasin Cuir Dakar Classic amna couleur marron chocolat, taille 44 kay. Fane lagnoukoy livré?" },
+      { client: "Salamalekoum", reply: "Malekoum Salam, lan nga beugone." },
+      { client: "Livrer ma ko suba ci kanam, mangi Plateau.", reply: "Livraison Plateau 1 500 FCFA, ban heure lagnou lakoy livré." },
+      { client: "Ndakarou bou bleu bi am na ?", reply: "Nono Ndakarou amoul bleu wayé amna Noir, Marron ou Vert, 22 000 FCFA lay diar." },
+      { client: "Meun ngeen ma ko livrer Parcelles Assainies ?", reply: "Waaw, 2 000 FCFA la." },
+      { client: "Je peux avoir une réduction ?", reply: "Amougnou information bobou." },
+    ],
     products: [
       {
         name: "Moccasin Cuir Dakar Classic",
@@ -694,6 +778,12 @@ const MERCHANTS = {
 };
 
 Object.values(MERCHANTS).forEach(m => { m.systemPrompt = buildSystemPrompt(m); });
+
+// Une ligne au démarrage pour savoir QUEL prompt tourne vraiment (variable demandée, et marchands qui reçoivent la variante).
+console.log('DEBUG - PROMPT VARIANT', {
+  variableDemandee: PROMPT_VARIANT || '(aucune)',
+  marchandsEnC2: PROMPT_VARIANT === 'c2' ? Object.values(MERCHANTS).filter((m) => Array.isArray(m.promptExamples) && m.promptExamples.length > 0).map((m) => m.name) : [],
+});
 
 function setStateField(state, field, value, isVoice) {
   const current = state[field];
@@ -883,8 +973,12 @@ function currentClientTextLower(rawText) {
 }
 
 function isShortAffirmative(rawText) {
-  const cleaned = currentClientTextLower(rawText);
-  return /^(oui+|ouais|ok+|okay|d'accord|daccord|c'est bon|cest bon|ca marche|confirme|parfait|va y)$/i.test(cleaned);
+  // La ponctuation et les émojis aux deux bouts sont ignorés (« Oui ! », « OK. », « oui 👍 ») : normalizeText ne les retire
+  // pas, et ces réponses étaient jetées. Le point d'interrogation reste, car « ok ? » est une question, pas une réponse.
+  // « waaw » (oui en wolof) est reconnu : c'est le mot que le modèle de conversation demande lui-même au client d'écrire.
+  const cleaned = currentClientTextLower(rawText)
+    .replace(/^[\s.!,;:…\p{Extended_Pictographic}\u200d\ufe0f]+|[\s.!,;:…\p{Extended_Pictographic}\u200d\ufe0f]+$/gu, '');
+  return /^(oui+|ouais|ok+|okay|d'accord|daccord|c'est bon|cest bon|ca marche|confirme|parfait|va y|wa{1,6}w+)$/i.test(cleaned);
 }
 
 function stripWolofMarker(content) {
@@ -1072,6 +1166,11 @@ const ASR_SERVICE_SHARED_SECRET = process.env.ASR_SERVICE_SHARED_SECRET;
 // d'habitude. Retour arrière immédiat : ASR_PROVIDER=xlsr. Le garde-fou « un vocal ne confirme jamais une commande »
 // est inchangé.
 //
+// ASR_DUAL_GRACE_MS (désactivé par défaut = on attend les deux) : une fois qu'UN service a répondu, l'autre n'a plus que ce
+// délai pour répondre ; passé ce délai on continue sans lui. Mesuré en test : le service NOXA répond en 1 à 3 s,
+// l'ancien service XLS-R en 10 à 40 s : sans ce délai, le client attend le plus lent. Si le premier à répondre a échoué,
+// on attend l'autre jusqu'au bout (délai ordinaire de 60 s). Valeur de départ raisonnable : 5000.
+//
 // Journalisation des transcriptions en mode dual : activée par défaut (ASR_LOG_TRANSCRIPTS=0 pour la couper), parce
 // qu'on ne peut pas juger un second modèle sans voir ce qu'il a écrit. Le webhook journalise déjà le texte de chaque
 // message client (« currentText ») : ce n'est pas une nouvelle catégorie de donnée.
@@ -1244,9 +1343,29 @@ async function transcribeWhatsAppAudio(mediaId) {
       const value = await fn(audioBuffer);
       return { value, ms: Date.now() - debut };
     };
-    const [xlsr, noxa] = await Promise.all([chronometre(transcribeWithXLSR), chronometre(transcribeWithNoxa)]);
+    const graceMs = Number(process.env.ASR_DUAL_GRACE_MS) || 0;
+    const pXlsr = chronometre(transcribeWithXLSR);
+    const pNoxa = chronometre(transcribeWithNoxa);
+    let xlsr, noxa;
+    let graceExpired = false;
+    if (graceMs > 0) {
+      pXlsr.then((v) => { xlsr = v; });
+      pNoxa.then((v) => { noxa = v; });
+      const premier = await Promise.race([pXlsr, pNoxa]);
+      if (premier.value) {
+        // Le premier a répondu : le second n'a plus que graceMs pour répondre.
+        await Promise.race([Promise.all([pXlsr, pNoxa]), new Promise((r) => setTimeout(r, graceMs))]);
+      } else {
+        await Promise.all([pXlsr, pNoxa]); // le premier a échoué : on attend l'autre jusqu'au bout
+      }
+      graceExpired = !xlsr || !noxa;
+      xlsr = xlsr || { value: null, ms: null };
+      noxa = noxa || { value: null, ms: null };
+    } else {
+      [xlsr, noxa] = await Promise.all([pXlsr, pNoxa]);
+    }
     console.log('DEBUG - ASR DUAL', {
-      xlsrOk: !!xlsr.value, noxaOk: !!noxa.value, xlsrMs: xlsr.ms, noxaMs: noxa.ms,
+      xlsrOk: !!xlsr.value, noxaOk: !!noxa.value, xlsrMs: xlsr.ms, noxaMs: noxa.ms, ...(graceMs > 0 ? { graceMs, graceExpired } : {}),
       agree: !!(xlsr.value && noxa.value) && normalizeText(xlsr.value) === normalizeText(noxa.value),
       ...(ASR_LOG_TRANSCRIPTS ? { xlsrText: xlsr.value, noxaText: noxa.value } : {}),
     });

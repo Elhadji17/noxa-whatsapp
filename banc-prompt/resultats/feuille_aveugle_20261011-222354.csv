@@ -1,0 +1,66 @@
+﻿"ligne";"message";"ce_que_le_client_a_dit";"reponse";"langue_ok (o/n)";"avance_vente (o/n)";"naturel (1-5)";"commentaire";"jeu"
+"1";"[MESSAGE VOCAL - transcription potentiellement imparfaite, fournisseur=xlsr] hammareela kulló rut nooh  la tay kaarandë";"J'aimerais la couleur rouge/noir et la taille 42";"Salam ! Baal ma, dégguma bien vocal bi 🙏 Mën nga ma ékrire modèle bi ngay-bëgg, wala ko répéter ?";"";"";"";"";"28cde959ea"
+"2";"[MESSAGE VOCAL - transcription potentiellement imparfaite, fournisseur=xlsr] hammareela kulló rut nooh  la tay kaarandë";"J'aimerais la couleur rouge/noir et la taille 42";"Désolé, je n'ai pas bien compris votre vocal. 🙏 Pouvez-vous l'écrire ou le répéter ? Dites-moi quel modèle vous intéresse, et je vous aide tout de suite !";"";"";"";"";"28cde959ea"
+"3";"[MESSAGE VOCAL - transcription potentiellement imparfaite, fournisseur=xlsr] hammareela kulló rut nooh  la tay kaarandë";"J'aimerais la couleur rouge/noir et la taille 42";"Désolé, je n'ai pas bien compris votre vocal. 🙏 Pouvez-vous l'écrire ou le répéter : quel produit vous intéresse ?";"";"";"";"";"28cde959ea"
+"4";"C'est combien la livraison à Mermoz ?";"";"Pour Mermoz, la livraison est à 1500 FCFA. 🙏
+Vous cherchez quel modèle de chaussures ?";"";"";"";"";"28cde959ea"
+"5";"C'est combien la livraison à Mermoz ?";"";"La livraison à Mermoz, c'est 1 500 FCFA. Vous cherchez quel modèle de chaussures ?";"";"";"";"";"28cde959ea"
+"6";"C'est combien la livraison à Mermoz ?";"";"Pour Mermoz, la livraison c'est 1500 FCFA. 🙏
+Tu cherches quel modèle ? Dis-moi le produit, la taille et la couleur, je te donne le total direct !";"";"";"";"";"28cde959ea"
+"7";"[MESSAGE VOCAL - transcription potentiellement imparfaite, fournisseur=xlsr+noxa] waaw ndakaaru bubble bi am na
+[AUTRE TRANSCRIPTION AUTOMATIQUE du même vocal, par un second système] waaw ndakarubu pleu bi am na";"Ndakarou bou bleu bi am na ?";"Waaw, am na ! C'est bien la Chaussure de ville Ndakarou à 22 000 FCFA que vous voulez ? Elle existe en Noir, Marron et Vert.";"";"";"";"";"28cde959ea"
+"8";"[MESSAGE VOCAL - transcription potentiellement imparfaite, fournisseur=xlsr+noxa] waaw ndakaaru bubble bi am na
+[AUTRE TRANSCRIPTION AUTOMATIQUE du même vocal, par un second système] waaw ndakarubu pleu bi am na";"Ndakarou bou bleu bi am na ?";"Waaw, am na ! Pour être sûr, c'est bien la Chaussure de ville Ndakarou à 22 000 FCFA que vous voulez ? Elle est disponible en Noir, Marron ou Vert.";"";"";"";"";"28cde959ea"
+"9";"[MESSAGE VOCAL - transcription potentiellement imparfaite, fournisseur=xlsr+noxa] waaw ndakaaru bubble bi am na
+[AUTRE TRANSCRIPTION AUTOMATIQUE du même vocal, par un second système] waaw ndakarubu pleu bi am na";"Ndakarou bou bleu bi am na ?";"Waaw, la Chaussure de ville Ndakarou, c'est bien elle que tu cherches ? Elle est à 22 000 FCFA, en Noir, Marron ou Vert, tailles 40 à 45.";"";"";"";"";"28cde959ea"
+"10";"oui";"";"C'est noté : Moccasin Cuir Dakar Classic, taille 42, Noir, à 18 000 FCFA. Vous êtes dans quelle zone pour la livraison ?";"";"";"";"";"28cde959ea"
+"11";"oui";"";"Waaw, c'est noté : Moccasin Cuir Dakar Classic en Noir, taille 42, à 18 000 FCFA. Vous êtes dans quelle zone pour la livraison ?";"";"";"";"";"28cde959ea"
+"12";"oui";"";"Waaw, c'est noté : Moccasin Cuir Dakar Classic, pointure 42, Noir, 18 000 FCFA. 👌 Ci kaw laan nga bëgg ñu yónnee la ko ? Dis-moi ta zone de livraison (Plateau, Parcelles, Rufisque...).";"";"";"";"";"28cde959ea"
+"13";"Mermoz";"";"Parfait, livraison à Mermoz : 1 500 FCFA, soit 13 500 FCFA au total pour le Samba en 43. 👌 Il est disponible en Blanc/Gris, Blanc/Bleu ou Vert, vous le voulez en quelle couleur ?";"";"";"";"";"28cde959ea"
+"14";"Mermoz";"";"Parfait, livraison à Mermoz : 1 500 FCFA, donc 13 500 FCFA au total avec le Samba en 43. Il est disponible en Blanc/Gris, Blanc/Bleu ou Vert, vous le voulez en quelle couleur ?";"";"";"";"";"28cde959ea"
+"15";"Mermoz";"";"Waaw, Mermoz c'est 1500 FCFA de livraison, donc le Samba en 43 fait 13 500 FCFA au total. 👌
+Il y a 3 couleurs pour le Samba : Blanc/Gris, Blanc/Bleu et Vert. Laquelle tu veux ?";"";"";"";"";"28cde959ea"
+"16";"Waaw salam, am ngeen chaussures yi ?";"";"Waaw, salam ! Am nagnou chaussures yi kay 🙏 Voilà ce qu'on a :
+
+- Moccasin Cuir Dakar Classic : 18 000 FCFA
+- Chaussure de ville Ndakarou : 22 000 FCFA
+- Sandale Cuir Samarra : 12 000 FCFA
+- Chaussure Richelieu Luxe Officer : 28 000 FCFA
+- Air Force One : 10 000 FCFA
+- Samba : 12 000 FCFA
+- Chaussure de sport Taggat Yaram : 20 000 FCFA
+
+Lan la gëna neex ? Wax ma modèle bi ak pointure bi, ma wone la couleurs yi.";"";"";"";"";"28cde959ea"
+"17";"Waaw salam, am ngeen chaussures yi ?";"";"Salam ! Waaw, am na. On a Moccasin Cuir Dakar Classic, Chaussure de ville Ndakarou, Sandale Cuir Samarra, Richelieu Luxe Officer, Air Force One, Samba et Taggat Yaram. Ban modèle nga bëgg ?";"";"";"";"";"28cde959ea"
+"18";"Waaw salam, am ngeen chaussures yi ?";"";"Waaw, am na ! Nu am Moccasin Cuir Dakar Classic, Chaussure de ville Ndakarou, Sandale Cuir Samarra, Richelieu Luxe Officer, Air Force One, Samba ak Chaussure de sport Taggat Yaram. Ban modèle ngeen bëgg ?";"";"";"";"";"28cde959ea"
+"19";"Bonjour";"";"Bonjour et bienvenue chez AD Shoes ! 👋 Vous cherchez quel type de chaussures aujourd'hui ?";"";"";"";"";"28cde959ea"
+"20";"Bonjour";"";"Bonjour ! Bienvenue chez AD Shoes 👋 Quel modèle vous intéresse : mocassin, chaussure de ville, sandale, Air Force One, Samba ou sport ?";"";"";"";"";"28cde959ea"
+"21";"Bonjour";"";"Bonjour et bienvenue chez AD Shoes ! 👋 Nanga def ? Dis-moi ce que tu cherches : moccasin, chaussure de ville, sandale, Richelieu, Air Force One, Samba ou chaussure de sport ?";"";"";"";"";"28cde959ea"
+"22";"[MESSAGE VOCAL - transcription potentiellement imparfaite, fournisseur=xlsr+noxa] hammareela kulló rut nooh  la tay kaarandë
+[AUTRE TRANSCRIPTION AUTOMATIQUE du même vocal, par un second système] gemrla coleur rouseno e la tay and";"J'aimerais la couleur rouge/noir et la taille 42";"Je crois avoir compris la couleur Rouge/Noir, mais le vocal n'est pas très clair. C'est bien ça ? On l'a en Air Force One (10 000 FCFA) et en Chaussure de sport Taggat Yaram (20 000 FCFA) : lequel vous intéresse, et en quelle pointure ?";"";"";"";"";"28cde959ea"
+"23";"[MESSAGE VOCAL - transcription potentiellement imparfaite, fournisseur=xlsr+noxa] hammareela kulló rut nooh  la tay kaarandë
+[AUTRE TRANSCRIPTION AUTOMATIQUE du même vocal, par un second système] gemrla coleur rouseno e la tay and";"J'aimerais la couleur rouge/noir et la taille 42";"Je n'ai pas bien compris votre vocal. Vous cherchez bien une chaussure en Rouge/Noir ? On l'a en Air Force One (10 000 FCFA) et en Chaussure de sport Taggat Yaram (20 000 FCFA). Dites-moi laquelle vous intéresse, et vous pouvez aussi m'écrire pour être sûr. 🙏";"";"";"";"";"28cde959ea"
+"24";"[MESSAGE VOCAL - transcription potentiellement imparfaite, fournisseur=xlsr+noxa] hammareela kulló rut nooh  la tay kaarandë
+[AUTRE TRANSCRIPTION AUTOMATIQUE du même vocal, par un second système] gemrla coleur rouseno e la tay and";"J'aimerais la couleur rouge/noir et la taille 42";"Merci pour le vocal, je ne l'ai pas bien capté. Vous cherchez bien la couleur Rouge/Noir ? On l'a en Air Force One (10 000 FCFA) et en Chaussure de sport Taggat Yaram (20 000 FCFA), c'est lequel des deux ?";"";"";"";"";"28cde959ea"
+"25";"Mocassin marron bi, am na pointure 44 ?";"";"Waaw, am na! Moccasin Cuir Dakar Classic Marron Chocolat bi disponible na en 44, 18 000 FCFA. 👌 Ana sa zone de livraison (Plateau, Parcelles, Rufisque...) ?";"";"";"";"";"28cde959ea"
+"26";"Mocassin marron bi, am na pointure 44 ?";"";"Waaw, am na ! Moccasin Cuir Dakar Classic en Marron Chocolat, pointure 44, c'est 18 000 FCFA. Vous êtes dans quelle zone pour la livraison ?";"";"";"";"";"28cde959ea"
+"27";"Mocassin marron bi, am na pointure 44 ?";"";"Waaw, am na ! Moccasin Cuir Dakar Classic en Marron Chocolat, pointure 44, c'est 18 000 FCFA. Vous êtes dans quelle zone pour la livraison ?";"";"";"";"";"28cde959ea"
+"28";"Je peux avoir une réduction ?";"";"Je n'ai pas cette info précise, on vérifie et je reviens vers vous vite ! En attendant, quel modèle vous intéresse ? 😊";"";"";"";"";"28cde959ea"
+"29";"Je peux avoir une réduction ?";"";"Je n'ai pas cette info précise, on vérifie et je reviens vers vous vite ! En attendant, dites-moi quel modèle vous intéresse, je vous donne le prix et les tailles dispo. 😊";"";"";"";"";"28cde959ea"
+"30";"Je peux avoir une réduction ?";"";"Je n'ai pas cette info précise sur les réductions, on vérifie et je reviens vers vous vite ! 🙏 En attendant, dis-moi quel modèle te plaît, je te donne la taille, la couleur et le prix.";"";"";"";"";"28cde959ea"
+"31";"waxal wolof";"";"Waaw, baax na ! Ma ngi lay jàppale. 🙏 Lii la nu am :
+
+- Moccasin Cuir Dakar Classic : 18 000 FCFA
+- Chaussure de ville Ndakarou : 22 000 FCFA
+- Sandale Cuir Samarra : 12 000 FCFA
+- Chaussure Richelieu Luxe Officer : 28 000 FCFA
+- Air Force One : 10 000 FCFA
+- Samba : 12 000 FCFA
+- Chaussure de sport Taggat Yaram : 20 000 FCFA
+
+Ban modèle nga bëgg ?";"";"";"";"";"28cde959ea"
+"32";"waxal wolof";"";"Waaw, jërejëf ! Ban chaussure nga bëgg, ak ban pointure (38, 39, 40...) ?";"";"";"";"";"28cde959ea"
+"33";"waxal wolof";"";"Waaw, baax na ! Dinaa la jàppale. Ban modèle ngeen bëgg ?";"";"";"";"";"28cde959ea"
+"34";"Salamalekoum";"";"Malekoum salam ! Bienvenue chez AD Shoes 🙏 Vous cherchez quel modèle de chaussures aujourd'hui ?";"";"";"";"";"28cde959ea"
+"35";"Salamalekoum";"";"Malekoum salam ! 🙏 Bienvenue chez AD Shoes. Lan laa la mën jëfandikoo, ban modèle nga bëgg ?";"";"";"";"";"28cde959ea"
+"36";"Salamalekoum";"";"Salamalekoum ! Bienvenue chez AD Shoes 🙏 Vous cherchez quel modèle de chaussures aujourd'hui ?";"";"";"";"";"28cde959ea"

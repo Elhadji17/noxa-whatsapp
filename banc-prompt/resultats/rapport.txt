@@ -1,0 +1,78 @@
+==============================================================================
+RAPPORT DU BANC D'ESSAI DE PROMPTS
+==============================================================================
+2 variantes × 40 messages × 2 répétition(s) = 160 réponses.
+15 message(s) écarté(s), car leur texte figure comme exemple dans un prompt comparé : B03, F03, F07, F08, VW01, VW02, VW03, VW04, W01, W03, X01, X02, X04, X05, X07
+
+1. VUE D'ENSEMBLE (par variante)
+variante               réponses langue ok   tout ok     mots prix hors   marq. ✗
+C2_exemples_elhadji         80      92 %      89 %     25.2         0         0
+C_restructure               80      85 %      81 %     27.4         0         0
+  langue ok : part des réponses dont la langue correspond à celle du client (hors réponses trop courtes pour être classées)
+  tout ok   : toutes les vérifications applicables au message sont passées
+  prix hors : réponses annonçant un montant absent du catalogue (et de ses sommes prix + livraison), hors chiffres déjà écrits par le client
+  marq. ✗   : marqueur attendu absent ou marqueur interdit présent
+
+2. LANGUE DE LA RÉPONSE SELON LA LANGUE DU CLIENT
+  client : fr
+    C2_exemples_elhadji    français 93 %   mixte 0 %    wolof 7 %    indéterminé 0 %    (n=30)
+    C_restructure          français 97 %   mixte 3 %    wolof 0 %    indéterminé 0 %    (n=30)
+  client : mixte
+    C2_exemples_elhadji    français 8 %    mixte 4 %    wolof 88 %   indéterminé 0 %    (n=24)
+    C_restructure          français 17 %   mixte 12 %   wolof 71 %   indéterminé 0 %    (n=24)
+  client : wolof
+    C2_exemples_elhadji    français 7 %    mixte 0 %    wolof 93 %   indéterminé 0 %    (n=14)
+    C_restructure          français 21 %   mixte 7 %    wolof 71 %   indéterminé 0 %    (n=14)
+  client : illisible
+    C2_exemples_elhadji    français 100 %  mixte 0 %    wolof 0 %    indéterminé 0 %    (n=12)
+    C_restructure          français 100 %  mixte 0 %    wolof 0 %    indéterminé 0 %    (n=12)
+  Règle de langue, calibrée sur ta relecture à l'aveugle (35 accords sur 36 ; 21 avec l'ancienne règle) : pour un client « mixte » ou
+  « wolof », seule une réponse principalement EN WOLOF est jugée conforme (du français précédé d'un « Waaw, am na ! » ne l'est pas) ; pour
+  un client « fr » ou un vocal « illisible », seule une réponse en français l'est. Pour changer une étiquette : messages_test.csv, puis
+  relance « lancer » (tout est en cache : instantané et gratuit).
+
+3. « TOUT OK » PAR CATÉGORIE DE MESSAGE
+catégorie      C2_exemples_elhadj C_restructure     
+bloc_francais  100 % (n=4)        100 % (n=4)       
+court          83 % (n=6)         83 % (n=6)        
+faits          100 % (n=6)        100 % (n=6)       
+fr_ecrit       100 % (n=12)       100 % (n=12)      
+mixte_ecrit    100 % (n=4)        100 % (n=4)       
+nouveau_fr     100 % (n=4)        75 % (n=4)        
+nouveau_vocal  50 % (n=6)         17 % (n=6)        
+nouveau_wolof  83 % (n=18)        61 % (n=18)       
+vocal_fr       100 % (n=12)       92 % (n=12)       
+vocal_wolof    50 % (n=4)         100 % (n=4)       
+wolof_ecrit    100 % (n=4)        100 % (n=4)       
+
+4. COMPARAISONS DEUX À DEUX (message par message, moyenne des répétitions ; test des signes)
+  C2_exemples_elhadji → C_restructure : C_restructure fait mieux sur 1 messages, moins bien sur 7, égal sur 32 ; p = 0.070
+  (p petit = différence peu probable par hasard ; avec ~40 messages, ne tire aucune conclusion de p > 0,10)
+
+5. ÉCHECS À REGARDER (jusqu'à 40)
+  [C2_exemples_elhadji] C02 rép.1 : mot_attendu | Livraison à Mermoz : 1 500 FCFA. Pour le Samba en 43, vous le voulez en quelle couleur : Blanc/Gris, Blanc/Ble
+  [C2_exemples_elhadji] VW06 rép.1 : langue | Livraison Mermoz, 1 500 FCFA la. Mermoz la nga wax, waaw ? Ban produit nga bëgg ?
+  [C2_exemples_elhadji] VW06 rép.2 : langue | Waaw, livraison Mermoz 1 500 FCFA la. Mermoz la nga nekk, c'est bien ça ? Et ban produit nga bëgg ?
+  [C2_exemples_elhadji] N04 rép.1 : langue | Je n'ai pas cette info précise, on vérifie et je reviens vers vous vite ! En attendant, quel modèle vous intér
+  [C2_exemples_elhadji] N04 rép.2 : langue | Je n'ai pas cette info précise, on vérifie et je reviens vers vous vite ! En attendant, quel modèle vous intér
+  [C2_exemples_elhadji] N05 rép.2 : langue | Amuma info bu leer ci loolu, on vérifie et je reviens vers vous vite ! Ban produit nga bëgg, ma ko seet ?
+  [C2_exemples_elhadji] N13 rép.1 : mot_attendu | Malekoum salam ! Vocal bi dégguma ko bu baax, mën nga ko bind walla waxaat ko ? Ban produit nga bëgg ?
+  [C2_exemples_elhadji] N13 rép.2 : mot_attendu | Malekoum salam ! Dégguma bien vocal bi. Mën nga ko bind walla waxaat ? Ban produit nga bëgg ?
+  [C2_exemples_elhadji] N14 rép.1 : langue | Désolé, je n'ai pas bien compris votre vocal. 🙏 Pouvez-vous m'écrire quel article vous cherchi (modèle, couleu
+  [C_restructure] C02 rép.2 : mot_attendu | Mermoz, livraison 1 500 FCFA, noté ! Pour votre Samba en 43, vous le voulez en quelle couleur : Blanc/Gris, Bl
+  [C_restructure] V06 rép.2 : mot_attendu | Désolé, je n'ai pas bien compris votre vocal. 🙏 Pouvez-vous m'écrire le modèle et la couleur que vous cherchez
+  [C_restructure] N03 rép.1 : langue | Waaw, deux paires, très bien ! Pour un petit geste sur le prix, je n'ai pas cette info précise, on vérifie et 
+  [C_restructure] N03 rép.2 : langue | Waaw, deux paires bu baax ! Pour un geste sur le prix, je n'ai pas cette info précise, on vérifie et je revien
+  [C_restructure] N04 rép.1 : langue | Je n'ai pas cette info précise, on vérifie et je reviens vers vous vite ! En attendant, quel modèle vous intér
+  [C_restructure] N04 rép.2 : langue | Je n'ai pas cette info précise, on vérifie et je reviens vers vous vite ! Quel modèle vous intéresse, pour que
+  [C_restructure] N05 rép.1 : langue | Jërejëf pour la question ! Je n'ai pas cette info précise, on vérifie et je reviens vers vous vite ! Ban modèl
+  [C_restructure] N05 rép.2 : langue | Je n'ai pas cette info précise, on vérifie et je reviens vers vous vite ! Ban modèle ngeen bëgg ?
+  [C_restructure] N09 rép.2 : langue | Bonjour, jërejëf ! Ban modèle nga gis ci story bi ? On a le Moccasin Cuir Dakar Classic, la Chaussure de ville
+  [C_restructure] N10 rép.2 : langue | Waaw, on livre à Rufisque : 3 000 FCFA. Quel modèle vous intéresse ?
+  [C_restructure] N12 rép.2 : langue | Waaw, am na ! Moccasin Cuir Dakar Classic, 18 000 FCFA, am na en Noir, Marron Chocolat ak Tan. C'est bien ce m
+  [C_restructure] N13 rép.1 : langue|mot_attendu | Salam ! Waaw, je n'ai pas bien saisi votre vocal. Pouvez-vous écrire le modèle qui vous intéresse, ou le répét
+  [C_restructure] N13 rép.2 : mot_attendu | Waaw salam ! Dégguma bu baax vocal bi. Mën nga ko bind walla waxaat ? Ban modèle de chaussures ngeen bëgg ?
+  [C_restructure] N14 rép.1 : langue | Salam ! Le vocal n'est pas passé clairement, je n'ai pas bien compris. Pouvez-vous m'écrire le modèle, la poin
+  [C_restructure] N14 rép.2 : langue | Désolé, je n'ai pas bien compris votre vocal. Pouvez-vous l'écrire ou le répéter : quel modèle, quelle pointur
+
+RAPPEL : ces vérifications automatiques ne jugent ni le naturel ni l'exactitude du wolof. Relis feuille_aveugle.csv.
