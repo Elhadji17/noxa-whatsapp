@@ -40,6 +40,11 @@ AJOUTER UN MOTEUR (par exemple un modèle ajusté ailleurs) :
 Chaque nouvelle condition est comparée à xlsr, whosper et deux. Les réponses déjà obtenues pour les conditions
 existantes restent valables (même consigne, même cache) tant que tu gardes le même --out-dir et --repetitions.
 
+CONDITION AVEC ÉTIQUETTES : ajoute « +etiq » à une combinaison (par exemple nouveau+xlsr+whisperfr+etiq). Les textes et leur ORDRE sont exactement
+ceux de la condition sans suffixe ; seule la consigne change : elle dit à Claude ce qu'est chaque transcription (modèle wolof ou Whisper forcé en
+français) et comment les croiser (l'absence d'un mot chez Whisper n'est pas un désaccord ; une phrase fluide sans rapport est à ignorer). Comparer
+nouveau+xlsr+whisperfr à nouveau+xlsr+whisperfr+etiq mesure donc l'effet de cette seule explication.
+
 Si le modèle refuse le paramètre 'temperature' (c'est le cas de claude-sonnet-5-5), les réponses sont
 échantillonnées au hasard : deux lancements peuvent différer. Utilise alors --repetitions 3 : le rapport
 montre la dispersion entre répétitions, et les comparaisons portent sur la moyenne. Une réponse illisible
@@ -79,11 +84,27 @@ CHAMPS = [("Produit", "produit"), ("Taille (entendue)", "taille"), ("Couleur", "
 CODES = [c for _, c in CHAMPS]
 CONDITIONS = ["reference", "xlsr", "whosper", "deux", "vide"]
 MOTEURS_DE_BASE = ["xlsr", "whosper"]
-NOMS_RESERVES = set(CONDITIONS) | {"deux"}
+NOMS_RESERVES = set(CONDITIONS) | {"deux", "etiq"}
+SUFFIXE_ETIQUETTES = "etiq"
+
+
+def separer_etiquettes(cond):
+    """'a+b+c+etiq' -> ('a+b+c', True) ; toute autre condition -> (cond, False)."""
+    if cond.endswith("+" + SUFFIXE_ETIQUETTES):
+        return cond[:-len(SUFFIXE_ETIQUETTES) - 1], True
+    return cond, False
+
+
+def moteurs_de_l_ordre(ordre):
+    """'A=whisperfr,B=nouveau,C=xlsr' -> ['whisperfr', 'nouveau', 'xlsr'] (les moteurs dans l'ordre des lettres)."""
+    return [p.split("=", 1)[1] for p in ordre.split(",")]
 
 
 def condition_valide(cond, moteurs_extra):
     """Condition de base, moteur supplémentaire seul, ou combinaison de 2 à 3 moteurs ('a+b', 'a+b+c')."""
+    base, avec_etiquettes = separer_etiquettes(cond)
+    if avec_etiquettes:                      # « +etiq » ne s'applique qu'à une vraie combinaison de 2 à 3 moteurs
+        return "+" in base and not separer_etiquettes(base)[1] and condition_valide(base, moteurs_extra)
     if cond in CONDITIONS:
         return True
     noms = MOTEURS_DE_BASE + list(moteurs_extra)
@@ -309,9 +330,40 @@ def uniformiser(texte):
     return re.sub(r"\s+", " ", t).strip()
 
 
-def construire_consigne(cat, textes):
-    """textes : liste d'une à trois transcriptions. Renvoie le message utilisateur."""
-    if len(textes) == 1:
+DESCRIPTIONS_MOTEURS = {
+    "xlsr": "un modèle entraîné pour le wolof (XLS-R) : il lit bien le wolof et les mots français courants, mais déforme le français parlé",
+    "nouveau": "un modèle entraîné pour le wolof (version ajustée) : il lit bien le wolof et les mots français courants, mais déforme le français parlé",
+    "whosper": "un modèle entraîné pour le wolof (Whosper) : il lit bien le wolof et les mots français courants, mais déforme le français parlé",
+    "whisperfr": "Whisper, FORCÉ EN FRANÇAIS : très fiable quand le client parle français ; quand le client parle wolof, il écrit souvent des phrases "
+                 "françaises fluides SANS RAPPORT avec ce qui a été dit",
+}
+DESCRIPTION_INCONNUE = "un système de transcription (profil non précisé)"
+
+
+def corps_etiquete(textes, moteurs):
+    """Condition « +etiq » : même textes, même ordre, mais on dit à Claude ce qu'est chaque transcription et comment les croiser."""
+    nombre = {2: "DEUX", 3: "TROIS"}[len(textes)]
+    lignes = [f"{nombre} TRANSCRIPTIONS AUTOMATIQUES DU MÊME MESSAGE ({nombre.lower()} systèmes différents).", "Ce que sont ces systèmes :"]
+    lignes += [f"- Transcription {lettre} : {DESCRIPTIONS_MOTEURS.get(m, DESCRIPTION_INCONNUE)}" for lettre, m in zip("ABC", moteurs)]
+    if "whisperfr" in moteurs:
+        w = "ABC"[moteurs.index("whisperfr")]
+        lignes += ["Comment les croiser :",
+                   f"- Ce qu'un modèle wolof lit (produit, couleur, taille, prix, zone) reste valable même si la transcription {w} (Whisper) ne le contient pas : "
+                   "l'absence d'un mot chez Whisper n'est PAS un désaccord.",
+                   f"- Si la transcription {w} (Whisper) est une phrase fluide qui n'a aucun mot en commun avec les autres, c'est une invention : ignore-la entièrement.",
+                   "- Si seul Whisper lit une valeur, retiens-la seulement si elle est cohérente avec le reste de ce que dit le client ; sinon mets null."]
+    else:
+        lignes.append("Aucune n'est présumée plus fiable : croise-les.")
+    lignes += [f"Transcription {lettre} :\n<<<\n{t}\n>>>" for lettre, t in zip("ABC", textes)]
+    return "\n".join(lignes)
+
+
+def construire_consigne(cat, textes, moteurs=None):
+    """textes : liste d'une à trois transcriptions. moteurs : leurs noms dans l'ordre des lettres, UNIQUEMENT pour une condition « +etiq »
+    (sinon None : le message est celui d'avant, à l'identique). Renvoie le message utilisateur."""
+    if moteurs is not None and len(textes) >= 2:
+        corps = corps_etiquete(textes, moteurs)
+    elif len(textes) == 1:
         corps = f"TRANSCRIPTION AUTOMATIQUE DU MESSAGE :\n<<<\n{textes[0]}\n>>>"
     elif len(textes) == 2:
         corps = ("DEUX TRANSCRIPTIONS AUTOMATIQUES DU MÊME MESSAGE (deux systèmes différents ; "
@@ -519,8 +571,9 @@ def textes_pour(condition, d, graine, uniformise):
         ordre = [a_en_premier, "whosper" if a_en_premier == "xlsr" else "xlsr"]
         return [f(d[ordre[0]]), f(d[ordre[1]])], f"A={ordre[0]},B={ordre[1]}"
     if "+" in condition:                      # combinaison : ordre tiré au sort, par vocal, de façon reproductible
-        ordre = condition.split("+")
-        random.Random(f"{graine}-{d['fichier']}-{condition}").shuffle(ordre)
+        base, _ = separer_etiquettes(condition)      # « +etiq » ne change NI l'ordre NI les textes : seule la consigne diffère
+        ordre = base.split("+")
+        random.Random(f"{graine}-{d['fichier']}-{base}").shuffle(ordre)
         return [f(texte_moteur(m, d)) for m in ordre], ",".join(f"{lettre}={m}" for lettre, m in zip("ABC", ordre))
     return [f(texte_moteur(condition, d))], ""      # moteur supplémentaire, seul
 
@@ -569,7 +622,8 @@ def executer(args, client):
         print(f"=== SYSTÈME ===\n{SYSTEME}\n")
         for c in conditions:
             textes, ordre = textes_pour(c, d, args.graine, args.uniformiser)
-            print(f"=== CONSIGNE, condition {c!r}, fichier {d['fichier']} {ordre} ===\n{construire_consigne(cat, textes)}\n")
+            etiq = separer_etiquettes(c)[1]
+            print(f"=== CONSIGNE, condition {c!r}, fichier {d['fichier']} {ordre} ===\n{construire_consigne(cat, textes, moteurs_de_l_ordre(ordre) if etiq else None)}\n")
         reps = max(1, getattr(args, "repetitions", 1))
         print(f"(--dry-run : rien n'a été envoyé. {len(donnees)} vocaux x {len(conditions)} conditions x {reps} répétition(s) "
               f"= {len(donnees) * len(conditions) * reps} appels au maximum ; la condition « vide » n'en demande qu'un par répétition.)")
@@ -585,7 +639,7 @@ def executer(args, client):
         for cond in conditions:
             for d in donnees:
                 textes, ordre = textes_pour(cond, d, args.graine, args.uniformiser)
-                user = construire_consigne(cat, textes)
+                user = construire_consigne(cat, textes, moteurs_de_l_ordre(ordre) if separer_etiquettes(cond)[1] else None)
                 k = Cache.cle(args.modele, args.temperature, SYSTEME, user, numero_rep)
                 brut = cache.get(k)
                 if brut is None:

@@ -4,6 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>NOXA — Votre assistant WhatsApp intelligent</title>
+<meta name="description" content="NOXA est un assistant WhatsApp pour commerçants à Dakar : il répond à vos clients jour et nuit, en français et en wolof, à partir de votre catalogue, et vous transmet les commandes.">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="fr_FR">
+<meta property="og:title" content="NOXA — Votre assistant WhatsApp intelligent">
+<meta property="og:description" content="Vos clients écrivent à 2h du matin. NOXA répond à leur place, en français comme en wolof.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
 <style>
@@ -236,6 +241,9 @@
   .form-msg.success { color: var(--teal); font-weight: 600; }
   .form-msg.error { color: #b34747; font-weight: 600; }
 
+  .wa-link { display: none; margin-top: 16px; color: var(--marigold); font-weight: 600; }
+  .wa-link.visible { display: inline-block; }
+
   footer {
     padding: 32px 0;
     text-align: center;
@@ -257,7 +265,7 @@
     <div>
       <div class="eyebrow">Assistant WhatsApp • Dakar</div>
       <h1>Vos clients écrivent à 2h du matin. NOXA répond à leur place.</h1>
-      <p class="sub">Un assistant intelligent branché sur votre WhatsApp habituel. Il connaît vos produits, vos prix, vos horaires — et répond en français comme en wolof, jour et nuit.</p>
+      <p class="sub">Un assistant intelligent sur WhatsApp, avec un numéro dédié à vos commandes. Il connaît vos produits, vos prix, vos horaires — et répond en français comme en wolof, jour et nuit.</p>
       <a href="#inscription" class="cta">Tester gratuitement</a>
     </div>
     <div class="phone" aria-hidden="true">
@@ -266,8 +274,8 @@
         <div class="bubble client b1">Am nga robe wax taille M ?</div>
         <div class="bubble bot b2">Waaw, am nañu ko ! 15 000 FCFA la. Ndax nga bëgg ma défal ko livraison ?</div>
         <div class="bubble client b3">Oui, à Sacré-Cœur</div>
-        <div class="bubble bot b4">Parfait, livraison 1 500 FCFA. Je vous envoie le lien de paiement 🥻</div>
-        <div class="timestamp">02:14 — répondu en 2 secondes</div>
+        <div class="bubble bot b4">Parfait, livraison 1 500 FCFA, total 16 500 FCFA. Payez via Wave au 77 000 00 00 🥻</div>
+        <div class="timestamp">02:14 — répondu pendant que vous dormiez</div>
       </div>
     </div>
   </div>
@@ -284,8 +292,8 @@
       </div>
       <div class="value-card">
         <div class="icon">✆</div>
-        <h3>Votre WhatsApp, inchangé</h3>
-        <p>Vous gardez votre numéro et votre application habituels. NOXA s'ajoute par-dessus, sans rien enlever.</p>
+        <h3>Votre numéro habituel, préservé</h3>
+        <p>Vous gardez votre numéro actuel pour vos contacts et vos statuts. NOXA tourne sur un numéro dédié aux commandes, vers lequel vos clients arrivent par un simple lien.</p>
       </div>
       <div class="value-card">
         <div class="icon">✎</div>
@@ -308,12 +316,35 @@
       <div class="step">
         <div class="num">02</div>
         <h3>NOXA répond à partir de votre catalogue</h3>
-        <p>L'assistant connaît vos produits exacts et répond en quelques secondes.</p>
+        <p>L'assistant connaît vos produits exacts, leurs tailles, leurs couleurs et leurs prix.</p>
       </div>
       <div class="step">
         <div class="num">03</div>
         <h3>Vous recevez la commande</h3>
-        <p>Plus besoin d'être derrière l'écran pour ne pas perdre une vente.</p>
+        <p>Vous recevez un message avec le produit, la taille, la couleur, la zone et le total. Vous vérifiez le paiement dans Wave, puis vous livrez.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="values">
+  <div class="container">
+    <h2>Ce qu'il faut savoir</h2>
+    <div class="value-grid">
+      <div class="value-card">
+        <div class="icon">✆</div>
+        <h3>Un numéro dédié</h3>
+        <p>NOXA utilise un numéro WhatsApp réservé aux commandes. Ce numéro ne peut pas servir en même temps dans l'application WhatsApp classique.</p>
+      </div>
+      <div class="value-card">
+        <div class="icon">◐</div>
+        <h3>Le paiement reste chez vous</h3>
+        <p>Le client paie sur votre numéro Wave. Vous vérifiez la réception dans Wave avant de livrer.</p>
+      </div>
+      <div class="value-card">
+        <div class="icon">✎</div>
+        <h3>Confirmation écrite avant toute commande</h3>
+        <p>Pour éviter les erreurs de taille ou de produit, une commande n'est transmise qu'après une confirmation écrite du client, même s'il a parlé. Le wolof très familier est encore en amélioration.</p>
       </div>
     </div>
   </div>
@@ -323,7 +354,8 @@
   <div class="container signup-inner">
     <div>
       <h2>Testez NOXA gratuitement</h2>
-      <p>Laissez vos informations, on vous contacte sous 24h pour mettre en place votre assistant, sans engagement.</p>
+      <p>Essai gratuit de 7 jours, sans engagement. Laissez vos informations, on vous contacte sous 24h pour mettre en place votre assistant.</p>
+      <a id="wa-contact" class="wa-link" href="#" rel="noopener">Ou écrivez-nous directement sur WhatsApp</a>
     </div>
     <form id="signup-form">
       <div>
@@ -335,6 +367,7 @@
         <select id="sector" name="sector" required>
           <option value="">Sélectionnez...</option>
           <option value="Vêtements">Vêtements</option>
+          <option value="Chaussures">Chaussures</option>
           <option value="Cosmétiques">Cosmétiques</option>
           <option value="Immobilier">Immobilier</option>
           <option value="Autre">Autre</option>
@@ -342,11 +375,15 @@
       </div>
       <div>
         <label for="whatsapp">Numéro WhatsApp du commerce</label>
-        <input type="tel" id="whatsapp" name="whatsapp" placeholder="+221 77 000 00 00" required>
+        <input type="tel" id="whatsapp" name="whatsapp" placeholder="+221 77 000 00 00" inputmode="tel" autocomplete="tel" required>
       </div>
       <div>
         <label for="contactName">Votre nom</label>
         <input type="text" id="contactName" name="contactName" required>
+      </div>
+      <div style="position:absolute;left:-9999px" aria-hidden="true">
+        <label for="website">Ne pas remplir</label>
+        <input type="text" id="website" name="website" tabindex="-1" autocomplete="off">
       </div>
       <button type="submit" class="submit-btn">Envoyer ma demande</button>
       <p class="form-msg" id="form-msg"></p>
@@ -361,6 +398,16 @@
 <script>
   const form = document.getElementById('signup-form');
   const msg = document.getElementById('form-msg');
+
+  // Numéro WhatsApp de contact, format international sans + ni espaces
+  // (ex. "221771234567"). Tant qu'il est vide, le lien reste masqué.
+  const CONTACT_WHATSAPP = '';
+  const waLink = document.getElementById('wa-contact');
+  if (/^\d{9,15}$/.test(CONTACT_WHATSAPP)) {
+    waLink.href = 'https://wa.me/' + CONTACT_WHATSAPP + '?text=' +
+      encodeURIComponent('Bonjour, je souhaite tester NOXA pour mon commerce.');
+    waLink.classList.add('visible');
+  }
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -387,38 +434,5 @@
     }
   });
 </script>
-<script src="https://connect.facebook.net/fr_FR/sdk.js" async defer crossorigin="anonymous"></script>
-
-<button id="fb-connect-btn" type="button">Connecter mon WhatsApp Business</button>
-
-<script>
-  window.fbAsyncInit = function() {
-    FB.init({
-      appId: '1011909694791836', // ton Identifiant de l'application NOXA
-      version: 'v21.0'
-    });
-  };
-
-  document.getElementById('fb-connect-btn').addEventListener('click', function() {
-    FB.login(function(response) {
-      if (response.authResponse && response.authResponse.code) {
-        fetch('/api/embedded-signup-callback', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ code: response.authResponse.code }),
-        });
-      }
-    }, {
-      config_id: '1570047668129228', // ta config noxa-config
-      response_type: 'code',
-      override_default_response_type: true,
-      extras: {
-        feature: 'whatsapp_embedded_signup',
-        sessionInfoVersion: '3',
-      }
-    });
-  });
-</script>
-
 </body>
 </html>
