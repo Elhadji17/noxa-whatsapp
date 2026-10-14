@@ -1,0 +1,76 @@
+KIT « VOCAUX FRANÇAIS » — mode d'emploi
+=========================================
+
+POURQUOI
+Ton corpus de test ne contient presque pas de français pur (2 champs notés sur 37), alors que ta plainte, ce sont les clients qui
+parlent français. Ce kit mesure ce qui manque : tu enregistres 22 phrases en français, et on regarde ce que XLS-R, ton modèle ajusté et
+Whisper-FR en tirent, puis ce que Claude en comprend (produit, couleur, taille, prix, zone : 42 valeurs à retrouver).
+
+ÉTAPE 1 — ENREGISTRER (un quart d'heure)
+ - Comme un vrai client : un message vocal WhatsApp par phrase, à toi-même ou à un ami. Lis la phrase TELLE QUELLE, naturellement, à vitesse
+   normale, le téléphone à distance normale. Un peu de bruit autour, c'est bien : les vrais clients ne sont pas dans un studio.
+ - Si tu te trompes, refais le vocal. Ne rajoute pas de mots.
+ - Récupère les fichiers comme pour Vocaux2 (fichiers .ogg) et nomme-les fr01.ogg, fr02.ogg ... fr22.ogg, dans un dossier « Vocaux_FR ».
+   (Les formats .opus, .m4a, .mp3 et .wav sont acceptés aussi.)
+ - IDÉAL : fais enregistrer les mêmes 22 phrases par une ou deux autres personnes (dossier « Vocaux_FR_B », puis relance avec
+   --dossier-audio Vocaux_FR_B --sortie resultats_fr_B). Avec ta seule voix, on ne saura pas si le résultat vaut pour d'autres clients.
+
+LES 22 PHRASES (aussi dans phrases.csv)
+  fr01   Bonsoir, est-ce que vous avez des chaussures de sport ?
+  fr02   Bonjour, je cherche des mocassins marron en taille quarante-trois.
+  fr03   Vous avez la Samba en blanc, pointure quarante-deux ?
+  fr04   Je voudrais l'Air Force One en blanc et bleu.
+  fr05   Combien coûte la chaussure de ville Ndakarou ?
+  fr06   Vous livrez à Mermoz ? Combien pour la livraison ?
+  fr07   Je suis à Parcelles Assainies, vous pouvez me livrer demain ?
+  fr08   Je prends les mocassins noirs en quarante-quatre, livraison à Ouakam.
+  fr09   C'est bon, quinze mille francs, je confirme la commande.
+  fr10   Le total fait dix-sept mille francs, je peux payer par Wave ?
+  fr11   Vous avez la sandale en marron, pointure quarante ?
+  fr12   Finalement, je prends le rouge, pas le noir.
+  fr13   Les Richelieu en noir, taille quarante-cinq, s'il vous plaît.
+  fr14   Est-ce que vous avez des baskets bleues en trente-neuf ?
+  fr15   Livrez-moi à Pikine, je prends deux paires de la Taggat Yaram.
+  fr16   Bonjour, je voudrais une veste noire, taille L.
+  fr17   Un pantalon jean bleu en taille XL, vous avez ?
+  fr18   Je suis à Yoff, combien la livraison ?
+  fr19   Quarante-deux en marron, c'est possible ?
+  fr20   C'est trop cher, vous pouvez faire dix mille ?
+  fr21   Je veux le même modèle en trente-huit, pour ma sœur.
+  fr22   Je suis à la Médina, vous livrez aujourd'hui ?
+
+ÉTAPE 2 — INSTALLER LE KIT
+ Copie ces quatre fichiers dans C:\Users\user\noxa-whatsapp\ (à côté de test_extraction_catalogue.py) :
+   transcrire_kit.py, transcrire_whisper_fr.py, phrases.csv, LISEZMOI.txt
+ Mets ton dossier Vocaux_FR au même endroit.
+
+ÉTAPE 3 — LANCER (invite de commandes Windows, dans C:\Users\user\noxa-whatsapp)
+ Les adresses et secrets sont ceux de tes variables dans Vercel. RIEN après le « = » : ni guillemets, ni espace.
+ Ne colle JAMAIS ces secrets dans une conversation. Ces variables ne durent que pour la fenêtre en cours.
+
+   set XLSR_SERVICE_URL=https://(adresse de ton ANCIEN service)
+   set XLSR_SERVICE_SECRET=(secret de l'ancien service)
+   set NOXA_SERVICE_URL=https://noxa-xlsr-asr-nouveau.onrender.com
+   set NOXA_SERVICE_SECRET=(secret du nouveau service)
+   set OPENAI_API_KEY=(ta clé OpenAI)
+
+ D'abord un essai sur 3 phrases :
+   python transcrire_kit.py --kit phrases.csv --dossier-audio Vocaux_FR --sortie resultats_fr --limite 3
+
+ Puis, si ça se passe bien, la même commande SANS --limite : les 3 déjà faites ne sont pas refaites.
+
+ À SAVOIR
+ - Un service Render gratuit s'endort : le premier appel peut demander plusieurs minutes (le script attend jusqu'à 5 minutes par service).
+ - Si un moteur est marqué « ABANDONNÉ » (secret refusé, service qui ne répond pas), corrige puis relance la même commande : seul ce qui
+   manque est refait.
+ - Whisper-FR coûte quelques centimes (tarif non vérifié) ; les deux services Render sont gratuits.
+
+ÉTAPE 4 — LIRE ET MESURER
+ À la fin, le script affiche : l'erreur moyenne de chaque moteur, ce que chacun a écrit pour chaque phrase, et la commande suivante. Lance
+ cette commande (avec ANTHROPIC_API_KEY définie) : elle fait lire les transcriptions par Claude et compte les valeurs retrouvées.
+ Il n'y a qu'à coller le rapport dans la conversation (et, si possible, joindre extraction_fr\resultats_extraction.csv).
+
+LIMITES (à garder en tête)
+ - Phrases LUES à voix haute : plus propres que de vrais clients qui improvisent. Les résultats donnent une tendance, pas une garantie.
+ - Une seule voix si tu es seul à enregistrer.
+ - 22 phrases : peu. Un écart de quelques points ne sera pas démontré.

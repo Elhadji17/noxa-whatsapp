@@ -137,6 +137,16 @@ def preparer_cle(brute):
     return cle, remarques
 
 
+def message_cle_refusee(code, detail):
+    return ("Clé OpenAI refusée (HTTP %s).\n   Réponse d'OpenAI : %s\n   À vérifier : (1) que la clé est copiée en entier, sur une seule ligne ; (2) qu'elle n'a pas été supprimée ni régénérée sur "
+            "platform.openai.com (API keys) ; (3) qu'il n'y a ni guillemets ni espace après « set OPENAI_API_KEY= » ; (4) qu'elle appartient à un projet "
+            "qui a accès à l'audio (Whisper)." % (code, detail))
+
+
+MESSAGE_CREDIT = ("Compte OpenAI à court de crédit (« insufficient_quota »). Ce n'est PAS une limite de débit passagère : attendre ne sert à rien. "
+                  "Ajoute du crédit sur platform.openai.com (Billing), puis relance : les fichiers déjà transcrits ne seront pas repayés.")
+
+
 def resume_cle(cle):
     """Début et fin de la clé, jamais la clé entière : de quoi reconnaître laquelle est lue sans la divulguer."""
     return "%d caractères, commence par « %s », finit par « …%s »" % (len(cle), cle[:8], cle[-4:] if len(cle) >= 12 else "")
@@ -155,12 +165,12 @@ def fabriquer_multipart(champs, nom, contenu, type_contenu):
     return corps, "multipart/form-data; boundary=%s" % frontiere
 
 
-def transcrire(contenu, cle, url=URL_PAR_DEFAUT, modele=MODELE_PAR_DEFAUT, langue=LANGUE_PAR_DEFAUT, essais=6, delai=2.0):
+def transcrire(contenu, cle, url=URL_PAR_DEFAUT, modele=MODELE_PAR_DEFAUT, langue=LANGUE_PAR_DEFAUT, essais=6, delai=2.0, nom_envoi="audio.ogg", type_envoi="audio/ogg"):
     """Texte renvoyé par Whisper pour ces octets audio. Lève ErreurScript si la clé est refusée ; renvoie None après trop d'échecs."""
     champs = {"model": modele}
     if langue:
         champs["language"] = langue
-    corps, type_contenu = fabriquer_multipart(champs, "audio.ogg", contenu, "audio/ogg")
+    corps, type_contenu = fabriquer_multipart(champs, nom_envoi, contenu, type_envoi)   # par défaut comme le webhook : audio.ogg / audio/ogg
     tentative = 0
     while True:
         tentative += 1
@@ -172,9 +182,9 @@ def transcrire(contenu, cle, url=URL_PAR_DEFAUT, modele=MODELE_PAR_DEFAUT, langu
         except urllib.error.HTTPError as e:
             detail = " ".join(e.read().decode("utf-8", errors="replace").split())[:500]
             if e.code in (401, 403):
-                raise ErreurScript("Clé OpenAI refusée (HTTP %s).\n   Réponse d'OpenAI : %s\n   À vérifier : (1) que la clé est copiée en entier, sur une seule ligne ; (2) qu'elle n'a pas été supprimée ni régénérée sur "
-                                   "platform.openai.com (API keys) ; (3) qu'il n'y a ni guillemets ni espace après « set OPENAI_API_KEY= » ; (4) qu'elle appartient à un projet "
-                                   "qui a accès à l'audio (Whisper)." % (e.code, detail))
+                raise ErreurScript(message_cle_refusee(e.code, detail))
+            if e.code == 429 and "insufficient_quota" in detail:
+                raise ErreurScript(MESSAGE_CREDIT)
             if e.code in (408, 409, 429, 500, 502, 503, 504) and tentative < essais:
                 try:
                     attente = float(e.headers.get("retry-after") or delai)
@@ -190,6 +200,23 @@ def transcrire(contenu, cle, url=URL_PAR_DEFAUT, modele=MODELE_PAR_DEFAUT, langu
                 delai = min(delai * 2, 60)
                 continue
             return None
+
+
+def verifier_cle(cle, url):
+    """Demande à OpenAI la liste des modèles : gratuit, sans audio. Lève ErreurScript si la clé est refusée ou le crédit épuisé."""
+    req = urllib.request.Request(url, method="GET", headers={"Authorization": "Bearer %s" % cle})
+    try:
+        with urllib.request.urlopen(req, timeout=60) as r:
+            return r.status
+    except urllib.error.HTTPError as e:
+        detail = " ".join(e.read().decode("utf-8", errors="replace").split())[:500]
+        if e.code in (401, 403):
+            raise ErreurScript(message_cle_refusee(e.code, detail))
+        if e.code == 429 and "insufficient_quota" in detail:
+            raise ErreurScript("Clé RECONNUE par OpenAI, mais " + MESSAGE_CREDIT[0].lower() + MESSAGE_CREDIT[1:])
+        raise ErreurScript("Réponse inattendue d'OpenAI (HTTP %s) : %s" % (e.code, detail))
+    except (urllib.error.URLError, TimeoutError) as e:
+        raise ErreurScript("OpenAI injoignable : %s" % e)
 
 
 # ---------------------------------------------------------------------------
@@ -250,7 +277,9 @@ def tableau(lignes_base, whisper, nouveau, sortie=print):
 
 def principal(argv=None, sortie=print):
     p = argparse.ArgumentParser(description="Transcrit les enregistrements de test avec Whisper-FR, comme le webhook.")
-    p.add_argument("--base", required=True, help="details_base.csv (chemins audio, références, transcriptions XLS-R)")
+    p.add_argument("--base", default="", help="details_base.csv (chemins audio, références, transcriptions XLS-R)")
+    p.add_argument("--verifier-cle", action="store_true", help="teste seulement la clé OPENAI_API_KEY (gratuit, sans audio) et s'arrête")
+    p.add_argument("--url-modeles", default="https://api.openai.com/v1/models", help=argparse.SUPPRESS)
     p.add_argument("--nouveau", default="", help="details_nouveau.csv (transcriptions du modèle ajusté), pour la comparaison")
     p.add_argument("--sortie", default="details_whisper.csv")
     p.add_argument("--dossier-audio", default="", help="dossier où chercher les fichiers audio si les chemins du CSV ne sont plus valides")
@@ -261,6 +290,17 @@ def principal(argv=None, sortie=print):
     p.add_argument("--oui", action="store_true", help="ne pas demander confirmation avant les appels")
     a = p.parse_args(argv)
     cle, remarques_cle = preparer_cle(os.environ.get("OPENAI_API_KEY", ""))
+    if a.verifier_cle:
+        if not cle:
+            raise ErreurScript("Variable d'environnement OPENAI_API_KEY absente. Windows : set OPENAI_API_KEY=sk-...")
+        sortie("Clé lue dans OPENAI_API_KEY : %s" % resume_cle(cle))
+        for rq in remarques_cle:
+            sortie("   ATTENTION : %s" % rq)
+        verifier_cle(cle, a.url_modeles)
+        sortie("Clé VALIDE : OpenAI l'accepte (la liste des modèles a répondu). Compare ses 4 derniers caractères avec ceux de ta clé dans Vercel.")
+        return 0
+    if not a.base:
+        raise ErreurScript("--base est obligatoire (sauf avec --verifier-cle).")
     base = lire_csv(a.base)
     for col in ("chemin_audio", "reference"):
         if base and col not in base[0]:

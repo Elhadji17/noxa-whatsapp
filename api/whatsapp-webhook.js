@@ -190,11 +190,30 @@ function buildDeliveryText(deliveryZones) {
   return deliveryZones.map(dz => `${dz.zones.join('/')} : ${dz.price} FCFA`).join(', ');
 }
 
+// Whisper-FR en parallèle des deux services wolof (voir le commentaire de configuration ASR plus bas). Lu ici, avec la même règle
+// que ASR_PROVIDER, car les prompts sont construits au chargement du fichier. Sans effet hors du mode dual.
+const ASR_DUAL_WHISPER = (process.env.ASR_PROVIDER || 'whisper') === 'dual' && ['1', 'true', 'yes', 'oui'].includes(String(process.env.ASR_DUAL_WHISPER || '').trim().toLowerCase());
+const ASR_WHISPER_TIMEOUT_MS = Number(process.env.ASR_WHISPER_TIMEOUT_MS) || 20000;
+
 // Consigne ajoutée au prompt UNIQUEMENT en mode ASR_PROVIDER=dual : dans tous les autres modes, le prompt reste
 // identique à l'original, octet pour octet. Les prompts des marchands sont construits UNE FOIS, au chargement du fichier
 // (voir plus bas) : la condition lit donc directement l'environnement, avec la même règle que ASR_PROVIDER
 // (valeur || 'whisper'), car cette constante n'est déclarée que bien après.
-const DUAL_ASR_PROMPT = (process.env.ASR_PROVIDER || 'whisper') !== 'dual' ? '' : `Parfois, un message vocal est suivi d'une ligne commençant par
+const DUAL_ASR_PROMPT = (process.env.ASR_PROVIDER || 'whisper') !== 'dual' ? '' : ASR_DUAL_WHISPER ? `Parfois, un message vocal est suivi d'une ou de deux lignes commençant par
+« [AUTRE TRANSCRIPTION AUTOMATIQUE du même vocal, par un second système] » puis
+« [TROISIÈME TRANSCRIPTION AUTOMATIQUE du même vocal, par un troisième système] ».
+Ce sont des transcriptions du MÊME message, faites par des systèmes différents qui
+se trompent à des endroits différents : aucune n'est présumée plus fiable.
+Croise-les pour comprendre ce que le client a voulu dire (un mot déformé dans
+l'une est parfois correct dans une autre). Si elles divergent sur une information
+critique (produit, taille, couleur, prix), ou si tu hésites, demande une
+confirmation explicite : la règle ci-dessus ne change pas, un vocal ne suffit
+jamais à confirmer une commande. Les transcriptions peuvent aussi n'être que du
+bruit : si aucune ne contient un mot reconnaissable lié à un produit, une couleur,
+une taille ou une zone (c'est le cas d'une simple salutation comme « bonsoir »),
+ne propose AUCUNE valeur et demande simplement au client d'écrire ou de répéter.
+
+` : `Parfois, un message vocal est suivi d'une ligne commençant par
 « [AUTRE TRANSCRIPTION AUTOMATIQUE du même vocal, par un second système] ».
 Ce sont deux transcriptions du MÊME message, faites par deux systèmes
 différents qui se trompent à des endroits différents : aucune n'est présumée
@@ -964,7 +983,7 @@ async function handleSessionResumption({ merchant, phoneNumberId, from, text, st
 // détecteurs déterministes ne lisent ainsi que la transcription principale, exactement comme avant.
 function stripVoiceMarkers(rawText) {
   return String(rawText)
-    .replace(/\s*\[AUTRE TRANSCRIPTION AUTOMATIQUE[^\]]*\][\s\S]*$/i, '')
+    .replace(/\s*\[(?:AUTRE|TROISIÈME) TRANSCRIPTION AUTOMATIQUE[^\]]*\][\s\S]*$/i, '')
     .replace(/^\[MESSAGE VOCAL[^\]]*\]\s*/i, '');
 }
 
@@ -1175,6 +1194,21 @@ const ASR_SERVICE_SHARED_SECRET = process.env.ASR_SERVICE_SHARED_SECRET;
 // qu'on ne peut pas juger un second modèle sans voir ce qu'il a écrit. Le webhook journalise déjà le texte de chaque
 // message client (« currentText ») : ce n'est pas une nouvelle catégorie de donnée.
 const ASR_LOG_TRANSCRIPTS = process.env.ASR_LOG_TRANSCRIPTS !== '0';
+//
+// ASR_DUAL_WHISPER=1 (uniquement avec ASR_PROVIDER=dual) : Whisper-FR est appelé EN PARALLÈLE des deux services wolof et sa
+// transcription est donnée à Claude comme TROISIÈME transcription. Éteint par défaut : tout est alors identique à avant.
+// Pourquoi : sur 22 phrases en français lues par une seule voix, XLS-R et le modèle ajusté n'écrivent en clair que 1 et 10
+// valeurs attendues sur 42 (Whisper-FR : 32 ; au moins un des trois : 36), et les trois transcriptions croisées par Claude ont
+// retrouvé 126 lectures sur 126, contre 86 sans Whisper-FR. Sur le wolof (29 vocaux d'une seule voix), Whisper-FR invente du
+// français plausible : il a fait perdre environ 2 mots simples sur 14 ; Claude répond alors « absent » et le bot redemande,
+// il n'affirme rien de faux (valeurs fausses affirmées : 1 contre 4 sans lui).
+// Les consignes du prompt restent NEUTRES (« aucune n'est présumée plus fiable : croise-les »), comme dans la condition
+// mesurée : une version avec règles explicatives a fait perdre 6 points en français pour un gain mince en wolof. XLS-R est
+// conservé : rien ne prouve qu'on puisse le retirer sans perte sur le wolof. Whisper-FR n'alimente JAMAIS les détecteurs
+// déterministes. Sa panne ou un délai dépassé (ASR_WHISPER_TIMEOUT_MS, 20000 par défaut) ne gêne jamais les deux autres.
+// Si les trois échouent, il n'y a pas de second appel Whisper-FR de repli (il a déjà été tenté). Il utilise OPENAI_API_KEY.
+// Retour arrière : supprimer ASR_DUAL_WHISPER dans Vercel puis redéployer.
+console.log('DEBUG - ASR CONFIG', { provider: ASR_PROVIDER, whisperEnParallele: ASR_DUAL_WHISPER });
 
 // ---------------------------------------------------------------------------
 // FOURNISSEUR DE CONVERSATION — interchangeable (AI_PROVIDER=gpt4o|claude)
@@ -1262,14 +1296,14 @@ async function downloadWhatsAppAudio(mediaId) {
   return await audioResponse.arrayBuffer();
 }
 
-async function transcribeWithWhisperFR(audioBuffer) {
+async function transcribeWithWhisperFR(audioBuffer, timeoutMs = 20000) {
   const formData = new FormData();
   formData.append('file', new Blob([audioBuffer], { type: 'audio/ogg' }), 'audio.ogg');
   formData.append('model', 'whisper-1');
   formData.append('language', 'fr');
   const response = await fetchWithTimeout('https://api.openai.com/v1/audio/transcriptions', {
     method: 'POST', headers: { 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}` }, body: formData,
-  });
+  }, timeoutMs);
   if (!response.ok) {
     console.error('DEBUG - Échec transcription Whisper-FR:', await response.text());
     return null;
@@ -1333,6 +1367,8 @@ async function transcribeWhatsAppAudio(mediaId) {
 
   let text = null;
   let alternativeText = null;
+  let thirdText = null;
+  let whisperTried = false;
   let provider = ASR_PROVIDER;
   let fallbackUsed = false;
 
@@ -1346,40 +1382,54 @@ async function transcribeWhatsAppAudio(mediaId) {
     const graceMs = Number(process.env.ASR_DUAL_GRACE_MS) || 0;
     const pXlsr = chronometre(transcribeWithXLSR);
     const pNoxa = chronometre(transcribeWithNoxa);
-    let xlsr, noxa;
+    // Whisper-FR en parallèle (ASR_DUAL_WHISPER=1) : sa panne ou son délai dépassé ne doit JAMAIS gêner les deux autres.
+    const pWhisper = ASR_DUAL_WHISPER
+      ? chronometre(async (buf) => {
+        try {
+          return await transcribeWithWhisperFR(buf, ASR_WHISPER_TIMEOUT_MS);
+        } catch (err) {
+          console.error('DEBUG - Erreur appel Whisper-FR (parallèle):', err);
+          return null;
+        }
+      })
+      : null;
+    const tous = pWhisper ? [pXlsr, pNoxa, pWhisper] : [pXlsr, pNoxa];
+    let xlsr, noxa, whisper;
     let graceExpired = false;
     if (graceMs > 0) {
       pXlsr.then((v) => { xlsr = v; });
       pNoxa.then((v) => { noxa = v; });
-      const premier = await Promise.race([pXlsr, pNoxa]);
+      if (pWhisper) pWhisper.then((v) => { whisper = v; });
+      const premier = await Promise.race(tous);
       if (premier.value) {
-        // Le premier a répondu : le second n'a plus que graceMs pour répondre.
-        await Promise.race([Promise.all([pXlsr, pNoxa]), new Promise((r) => setTimeout(r, graceMs))]);
+        // Le premier a répondu : les autres n'ont plus que graceMs pour répondre.
+        await Promise.race([Promise.all(tous), new Promise((r) => setTimeout(r, graceMs))]);
       } else {
-        await Promise.all([pXlsr, pNoxa]); // le premier a échoué : on attend l'autre jusqu'au bout
+        await Promise.all(tous); // le premier a échoué : on attend les autres jusqu'au bout
       }
-      graceExpired = !xlsr || !noxa;
+      graceExpired = !xlsr || !noxa || (!!pWhisper && !whisper);
       xlsr = xlsr || { value: null, ms: null };
       noxa = noxa || { value: null, ms: null };
+      if (pWhisper) whisper = whisper || { value: null, ms: null };
     } else {
-      [xlsr, noxa] = await Promise.all([pXlsr, pNoxa]);
+      [xlsr, noxa, whisper] = await Promise.all(tous);
     }
     console.log('DEBUG - ASR DUAL', {
       xlsrOk: !!xlsr.value, noxaOk: !!noxa.value, xlsrMs: xlsr.ms, noxaMs: noxa.ms, ...(graceMs > 0 ? { graceMs, graceExpired } : {}),
       agree: !!(xlsr.value && noxa.value) && normalizeText(xlsr.value) === normalizeText(noxa.value),
-      ...(ASR_LOG_TRANSCRIPTS ? { xlsrText: xlsr.value, noxaText: noxa.value } : {}),
+      ...(pWhisper ? { whisperOk: !!whisper.value, whisperMs: whisper.ms } : {}),
+      ...(ASR_LOG_TRANSCRIPTS ? { xlsrText: xlsr.value, noxaText: noxa.value, ...(pWhisper ? { whisperText: whisper.value } : {}) } : {}),
     });
-    if (xlsr.value && noxa.value) {
-      text = xlsr.value;
-      alternativeText = noxa.value;
-      provider = 'xlsr+noxa';
-    } else if (xlsr.value) {
-      text = xlsr.value;
-      provider = 'xlsr';
-    } else if (noxa.value) {
-      text = noxa.value;
-      provider = 'noxa';
+    // Priorité : XLS-R (transcription principale, seule lue par les détecteurs), puis le modèle ajusté, puis Whisper-FR. Les
+    // suivantes, quand elles existent, sont données à Claude comme 2e et 3e transcriptions. Sans Whisper-FR : exactement comme avant.
+    const sources = [['xlsr', xlsr.value], ['noxa', noxa.value], ...(pWhisper ? [['whisper', whisper.value]] : [])].filter(([, v]) => v);
+    if (sources.length) {
+      text = sources[0][1];
+      alternativeText = sources[1] ? sources[1][1] : null;
+      thirdText = sources[2] ? sources[2][1] : null;
+      provider = sources.map(([nom]) => nom).join('+');
     }
+    whisperTried = !!pWhisper;
   } else if (ASR_PROVIDER === 'xlsr') {
     text = await transcribeWithXLSR(audioBuffer);
   } else if (ASR_PROVIDER === 'whosper') {
@@ -1392,16 +1442,16 @@ async function transcribeWhatsAppAudio(mediaId) {
   // timeout, variable d'environnement absente, réponse vide...) et que ce
   // n'est pas déjà Whisper-FR, on retente avec Whisper-FR plutôt que de
   // perdre le message.
-  if (!text && ASR_PROVIDER !== 'whisper') {
+  if (!text && ASR_PROVIDER !== 'whisper' && !whisperTried) {   // Whisper-FR déjà tenté en parallèle : pas de second appel inutile
     console.log(`DEBUG - Repli sur Whisper-FR après échec de ${ASR_PROVIDER}`);
     text = await transcribeWithWhisperFR(audioBuffer);
     provider = 'whisper';
     fallbackUsed = true;
   }
 
-  console.log('DEBUG - ASR RESULT', { requestedProvider: ASR_PROVIDER, actualProvider: provider, fallbackUsed, textLength: text?.length || 0, hasAlternative: !!alternativeText, downloadMs, asrMs: Date.now() - asrStart });
+  console.log('DEBUG - ASR RESULT', { requestedProvider: ASR_PROVIDER, actualProvider: provider, fallbackUsed, textLength: text?.length || 0, hasAlternative: !!alternativeText, ...(ASR_DUAL_WHISPER ? { hasThird: !!thirdText } : {}), downloadMs, asrMs: Date.now() - asrStart });
 
-  return { text, provider, fallbackUsed, alternativeText };
+  return { text, provider, fallbackUsed, alternativeText, thirdText };
 }
 
 // Texte du message vocal tel que stocké dans l'historique et vu par le modèle de conversation. Sans seconde
@@ -1409,7 +1459,9 @@ async function transcribeWhatsAppAudio(mediaId) {
 function formatVoiceMessage(asrResult) {
   const principal = `[MESSAGE VOCAL - transcription potentiellement imparfaite, fournisseur=${asrResult.provider}${asrResult.fallbackUsed ? ' (repli)' : ''}] ${asrResult.text}`;
   if (!asrResult.alternativeText) return principal;
-  return `${principal}\n[AUTRE TRANSCRIPTION AUTOMATIQUE du même vocal, par un second système] ${asrResult.alternativeText}`;
+  const avecSecond = `${principal}\n[AUTRE TRANSCRIPTION AUTOMATIQUE du même vocal, par un second système] ${asrResult.alternativeText}`;
+  if (!asrResult.thirdText) return avecSecond;
+  return `${avecSecond}\n[TROISIÈME TRANSCRIPTION AUTOMATIQUE du même vocal, par un troisième système] ${asrResult.thirdText}`;
 }
 
 function formatNumbersForSpeech(text) {

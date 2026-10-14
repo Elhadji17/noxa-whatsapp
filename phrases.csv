@@ -1,0 +1,23 @@
+﻿fichier;phrase;produit;taille;couleur;prix;zone
+fr01;Bonsoir, est-ce que vous avez des chaussures de sport ?;chaussures;;;;
+fr02;Bonjour, je cherche des mocassins marron en taille quarante-trois.;mocassin;quarante-trois;marron;;
+fr03;Vous avez la Samba en blanc, pointure quarante-deux ?;Samba;quarante-deux;blanc;;
+fr04;Je voudrais l'Air Force One en blanc et bleu.;Air Force One;;blanc / bleu;;
+fr05;Combien coûte la chaussure de ville Ndakarou ?;Ndakarou;;;;
+fr06;Vous livrez à Mermoz ? Combien pour la livraison ?;;;;;Mermoz
+fr07;Je suis à Parcelles Assainies, vous pouvez me livrer demain ?;;;;;Parcelles Assainies
+fr08;Je prends les mocassins noirs en quarante-quatre, livraison à Ouakam.;mocassin;quarante-quatre;noir;;Ouakam
+fr09;C'est bon, quinze mille francs, je confirme la commande.;;;;quinze mille;
+fr10;Le total fait dix-sept mille francs, je peux payer par Wave ?;;;;dix-sept mille;
+fr11;Vous avez la sandale en marron, pointure quarante ?;sandale;quarante;marron;;
+fr12;Finalement, je prends le rouge, pas le noir.;;;rouge;;
+fr13;Les Richelieu en noir, taille quarante-cinq, s'il vous plaît.;Richelieu;quarante-cinq;noir;;
+fr14;Est-ce que vous avez des baskets bleues en trente-neuf ?;basket;trente-neuf;bleu;;
+fr15;Livrez-moi à Pikine, je prends deux paires de la Taggat Yaram.;Taggat Yaram;;;;Pikine
+fr16;Bonjour, je voudrais une veste noire, taille L.;veste;L;noir;;
+fr17;Un pantalon jean bleu en taille XL, vous avez ?;pantalon jean;XL;bleu;;
+fr18;Je suis à Yoff, combien la livraison ?;;;;;Yoff
+fr19;Quarante-deux en marron, c'est possible ?;;quarante-deux;marron;;
+fr20;C'est trop cher, vous pouvez faire dix mille ?;;;;dix mille;
+fr21;Je veux le même modèle en trente-huit, pour ma sœur.;;trente-huit;;;
+fr22;Je suis à la Médina, vous livrez aujourd'hui ?;;;;;Médina
