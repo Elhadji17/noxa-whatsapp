@@ -7,6 +7,8 @@
 <meta name="description" content="NOXA est un assistant WhatsApp pour commerçants à Dakar : il répond à vos clients jour et nuit, en français et en wolof, à partir de votre catalogue, et vous transmet les commandes.">
 <meta property="og:type" content="website">
 <meta property="og:locale" content="fr_FR">
+<meta property="og:url" content="https://www.noxa-ai.com/">
+<link rel="canonical" href="https://www.noxa-ai.com/">
 <meta property="og:title" content="NOXA — Votre assistant WhatsApp intelligent">
 <meta property="og:description" content="Vos clients écrivent à 2h du matin. NOXA répond à leur place, en français comme en wolof.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -380,7 +382,7 @@
 
   // Numéro WhatsApp de contact, format international sans + ni espaces
   // (ex. "221771234567"). Tant qu'il est vide, le lien reste masqué.
-  const CONTACT_WHATSAPP = '';
+  const CONTACT_WHATSAPP = '221781178874';
   const waLink = document.getElementById('wa-contact');
   if (/^\d{9,15}$/.test(CONTACT_WHATSAPP)) {
     waLink.href = 'https://wa.me/' + CONTACT_WHATSAPP + '?text=' +
