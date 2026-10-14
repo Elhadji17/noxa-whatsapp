@@ -67,6 +67,7 @@ async function sendEmail(lead) {
       console.error('Inscription - échec email', res.status, await res.text());
       return { ok: false };
     }
+    console.log('Inscription - email accepté par Resend, destinataire :', to);
     return { ok: true };
   } catch (err) {
     console.error('Inscription - erreur email', err);
@@ -121,6 +122,9 @@ async function notifyWhatsApp(lead) {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       console.error('Inscription - échec WhatsApp', res.status, 'phone_number_id:', phoneId, JSON.stringify(data));
+      if (data?.error?.code === 133010) {
+        console.error("Inscription - le numéro émetteur n'est plus enregistré sur l'API Cloud : mets à jour WHATSAPP_PHONE_NUMBER_ID dans Vercel.");
+      }
       return { ok: false };
     }
     console.log('Inscription - WhatsApp accepté par Meta (livraison non garantie) :', JSON.stringify(data.messages || data));
@@ -163,6 +167,11 @@ export default async function handler(req, res) {
       sendEmail(lead),
       notifyWhatsApp(lead),
     ]);
+
+    const state = r => (r.ok ? 'ok' : r.skipped ? 'non configuré' : 'échec');
+    console.log('Inscription - canaux :', JSON.stringify({
+      redis: state(redis), email: state(email), whatsapp: state(whatsapp),
+    }));
 
     const durable = redis.ok || email.ok;
     if (!durable) {
