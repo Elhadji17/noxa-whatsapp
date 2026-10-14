@@ -2,6 +2,7 @@
 import { Redis } from '@upstash/redis';
 import { waitUntil } from '@vercel/functions';
 import crypto from 'crypto';
+import { Analytics } from "@vercel/analytics/next"
 
 // ---------------------------------------------------------------------------
 // REDIS — connexion
