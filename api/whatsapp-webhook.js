@@ -3,7 +3,6 @@ import { Redis } from '@upstash/redis';
 import { waitUntil } from '@vercel/functions';
 import crypto from 'crypto';
 
-
 // ---------------------------------------------------------------------------
 // REDIS — connexion
 // ---------------------------------------------------------------------------
@@ -1109,6 +1108,54 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 20000) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// INDICATEUR « EN TRAIN D'ÉCRIRE » (TYPING_INDICATOR=1) — éteint par défaut : tout est alors identique à avant.
+// ---------------------------------------------------------------------------
+// Un vocal prend 21 à 28 s de bout en bout (transcription ~13 s, puis Claude ~5 s) ; un message écrit ~5 s. Pendant ce temps le
+// client ne voit rien. Cloud API sait afficher « en train d'écrire… » : un appel marque le message reçu comme LU (coches bleues) et
+// affiche l'indicateur, jusqu'à l'envoi de notre réponse ou 25 s, selon ce qui arrive en premier (doc Meta « Typing indicators »).
+// Meta demande de ne l'afficher QUE si on va répondre : il n'est donc envoyé que pour un message texte non vide ou un vocal, d'un
+// marchand connu, qui n'a pas déjà été traité (un doublon de livraison n'aura pas de réponse). Pour un vocal, un second appel suit
+// la transcription : l'indicateur s'éteint seul après 25 s et la réponse peut venir plus tard. L'appel ne bloque JAMAIS : lancé en
+// arrière-plan, erreurs avalées et journalisées (« DEBUG - Échec indicateur de saisie »), délai maximal TYPING_TIMEOUT_MS (5000).
+// Version de l'API : WHATSAPP_TYPING_API_VERSION (v26.0 par défaut, celle de l'exemple de la doc Meta) ; le reste du webhook reste en
+// v21.0, et je n'ai pas pu vérifier que v21.0 accepte ce champ. Retour arrière : supprimer TYPING_INDICATOR et redéployer.
+const TYPING_INDICATOR = ['1', 'true', 'yes', 'oui'].includes(String(process.env.TYPING_INDICATOR || '').trim().toLowerCase());
+const TYPING_API_VERSION = String(process.env.WHATSAPP_TYPING_API_VERSION || '').trim() || 'v26.0';
+const TYPING_TIMEOUT_MS = Number(process.env.TYPING_TIMEOUT_MS) || 5000;
+console.log('DEBUG - TYPING CONFIG', { actif: TYPING_INDICATOR, version: TYPING_API_VERSION });
+
+// Ne lève JAMAIS d'exception et renvoie true/false : l'appelant n'a rien à attraper.
+async function sendTypingIndicator(phoneNumberId, messageId) {
+  try {
+    if (!messageId) return false;
+    if (await isMessageAlreadyProcessed(messageId)) {
+      console.log('DEBUG - TYPING IGNORÉ (message déjà traité)', { messageId });
+      return false;
+    }
+    const debut = Date.now();
+    const response = await fetchWithTimeout(`https://graph.facebook.com/${TYPING_API_VERSION}/${phoneNumberId}/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}` },
+      body: JSON.stringify({ messaging_product: 'whatsapp', status: 'read', message_id: messageId, typing_indicator: { type: 'text' } }),
+    }, TYPING_TIMEOUT_MS);
+    if (!response.ok) {
+      console.error('DEBUG - Échec indicateur de saisie', { status: response.status, version: TYPING_API_VERSION, reponse: String(await response.text()).slice(0, 300) });
+      return false;
+    }
+    console.log('DEBUG - TYPING OK', { messageId, ms: Date.now() - debut });
+    return true;
+  } catch (err) {
+    console.error('DEBUG - Erreur indicateur de saisie', err);
+    return false;
+  }
+}
+
+// Lance une tâche en arrière-plan en demandant à la plateforme de garder l'invocation active jusqu'à sa fin (jamais d'exception).
+function enArrierePlan(promesse) {
+  try { waitUntil(promesse); } catch (err) { /* hors contexte de requête : la tâche tourne quand même */ }
+}
+
 async function sendWhatsAppText(phoneNumberId, to, body) {
   const response = await fetchWithTimeout(`https://graph.facebook.com/v21.0/${phoneNumberId}/messages`, {
     method: 'POST',
@@ -1874,6 +1921,11 @@ async function handleIncomingMessage(body) {
     let text = message.text?.body;
     let wasVoiceMessage = false;
 
+    // « En train d'écrire… » : seulement si on va répondre (texte non vide ou vocal, marchand connu) — voir plus haut.
+    const afficherSaisie = TYPING_INDICATOR && !!MERCHANTS[phoneNumberId]
+      && ((message.type === 'text' && !!message.text?.body) || (message.type === 'audio' && !!message.audio?.id));
+    if (afficherSaisie) enArrierePlan(sendTypingIndicator(phoneNumberId, messageId));
+
     if (message.type === 'audio' && message.audio?.id) {
       const asrResult = await transcribeWhatsAppAudio(message.audio.id);
       if (!asrResult.text) {
@@ -1885,6 +1937,8 @@ async function handleIncomingMessage(body) {
       }
       wasVoiceMessage = true;
       text = formatVoiceMessage(asrResult);
+      // La transcription a consommé la moitié des 25 s de l'indicateur : on le rafraîchit avant l'appel à Claude.
+      if (afficherSaisie) enArrierePlan(sendTypingIndicator(phoneNumberId, messageId));
     }
     if (!text) return;
 
